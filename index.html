@@ -1,198 +1,112 @@
-p
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙球彈跳對戰 - 技能自選版</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>雙球生存對決-滑動選角版</title>
     <style>
         * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
-        body {
-            margin: 0; background-color: #1a1a1a; color: white;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden;
-        }
-        #selectionScreen {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            width: 100vw; height: 100vh; padding: 20px; text-align: center; position: absolute; background-color: #111; z-index: 10;
-        }
-        .select-title { font-size: 24px; margin-bottom: 5px; font-weight: bold; color: #f1c40f; }
-        .select-subtitle { font-size: 14px; margin-bottom: 20px; color: #aaa; }
-        .select-box { display: grid; grid-template-columns: 1fr; gap: 15px; width: 100%; max-width: 320px; }
-        .btn-select {
-            padding: 14px; font-size: 16px; font-weight: bold; border: 2px solid #555;
-            border-radius: 12px; background: #222; color: #fff; cursor: pointer; transition: 0.2s;
-        }
-        .btn-select.active1 { border-color: #ff4757; background: rgba(255,71,87,0.2); }
-        .btn-select.active2 { border-color: #2ed573; background: rgba(46,213,115,0.2); }
-        #startBtn {
-            margin-top: 30px; width: 100%; max-width: 200px; padding: 15px;
-            font-size: 18px; font-weight: bold; background: #f1c40f; color: #000; border: none; border-radius: 30px;
-        }
+        body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #selectionScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; background: #111; z-index: 10; position: absolute; padding: 15px; }
+        .swipe-container { width: 100%; max-width: 320px; background: #222; border-radius: 16px; padding: 15px; margin: 10px 0; text-align: center; position: relative; touch-action: pan-y; }
+        .p1-box { border: 2px solid #ff4757; } .p2-box { border: 2px solid #2ed573; }
+        .skill-title { font-size: 20px; font-weight: bold; margin: 10px 0 5px 0; color: #fff; }
+        .skill-desc { font-size: 13px; color: #aaa; min-height: 36px; padding: 0 10px; }
+        .arrow { font-size: 24px; color: #f1c40f; position: absolute; top: 40%; transform: translateY(-50%); font-weight: bold; animation: bounce 1s infinite alternate; }
+        .arrow-l { left: 10px; } .arrow-r { right: 10px; }
+        @keyframes bounce { from { opacity: 0.4; } to { opacity: 1; } }
+        #startBtn { margin-top: 15px; width: 100%; max-width: 200px; padding: 14px; font-size: 18px; font-weight: bold; background: #f1c40f; border: none; border-radius: 25px; }
         #gameScreen { display: none; flex-direction: column; align-items: center; width: 100vw; }
-        #scoreboard { display: flex; justify-content: space-around; width: 100%; max-width: 500px; font-size: 16px; font-weight: bold; margin-bottom: 10px; text-align: center; }
-        .player1 { color: #ff4757; } .player2 { color: #2ed573; }
-        .status-txt { font-size: 11px; color: #aaa; margin-top: 2px; height: 15px; }
-        canvas { border: 2px solid #fff; background-color: #050505; max-width: 95vw; max-height: 65vh; }
-        #gameOverScreen {
-            display: none; position: absolute; background: rgba(0,0,0,0.95);
-            width: 85%; max-width: 300px; padding: 25px; border-radius: 16px; text-align: center; border: 2px solid #fff; z-index: 20;
-        }
-        #gameOverScreen h2 { margin-top: 0; color: #f1c40f; font-size: 22px; }
-        #backToSelectBtn { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #fff; border: none; border-radius: 8px; font-weight: bold; color: #000; }
+        #scoreboard { display: flex; justify-content: space-around; width: 100%; max-width: 500px; font-size: 14px; font-weight: bold; margin-bottom: 5px; text-align: center; }
+        canvas { border: 2px solid #fff; background: #050505; max-width: 95vw; max-height: 65vh; }
+        #gameOverScreen { display: none; position: absolute; background: rgba(0,0,0,0.95); width: 80%; max-width: 280px; padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #fff; z-index: 20; }
     </style>
 </head>
 <body>
     <div id="selectionScreen">
-        <div class="select-title">⚔️ 雙球生存大對決 ⚔️</div>
-        <div class="select-subtitle">請在手機上點選雙方的技能特性</div>
-        <h3 class="player1" style="margin: 5px 0;">🔴 玩家 1 (紅球) 技能：</h3>
-        <div class="select-box" id="p1Box">
-            <button class="btn-select active1" onclick="selectSkill(1, 'shield')">🛡️ 護盾 (10秒發動/無敵5秒)</button>
-            <button class="btn-select" onclick="selectSkill(1, 'giant')">💪 巨大 (15秒發動/變大加速10秒)</button>
-            <button class="btn-select" onclick="selectSkill(1, 'crow')">🦅 烏鴉 (5秒生一隻/穿牆追蹤)</button>
-            <button class="btn-select" onclick="selectSkill(1, 'block')">🧱 障礙 (10秒放一個同體積方塊)</button>
+        <h3 style="color:#f1c40f; margin:0 0 5px 0;">⚔️ 左右滑動選擇技能 ⚔️</h3>
+        <h4 style="color:#ff4757; margin:5px 0 0 0;">🔴 P1 (紅球) 技能</h4>
+        <div class="swipe-container p1-box" id="p1Swipe">
+            <span class="arrow arrow-l">◀</span><div class="skill-title" id="p1Title">🛡️ 護盾</div>
+            <div class="skill-desc" id="p1Desc">每 10 秒發動無敵 5 秒，期間不承受任何碰撞傷害。</div><span class="arrow arrow-r">▶</span>
         </div>
-        <h3 class="player2" style="margin: 15px 0 5px 0;">🟢 玩家 2 (綠球) 技能：</h3>
-        <div class="select-box" id="p2Box">
-            <button class="btn-select" onclick="selectSkill(2, 'shield')">🛡️ 護盾 (10秒發動/無敵5秒)</button>
-            <button class="btn-select active2" onclick="selectSkill(2, 'giant')">💪 巨大 (15秒發動/變大加速10秒)</button>
-            <button class="btn-select" onclick="selectSkill(2, 'crow')">🦅 烏鴉 (5秒生一隻/穿牆追蹤)</button>
-            <button class="btn-select" onclick="selectSkill(2, 'block')">🧱 障礙 (10秒放一個同體積方塊)</button>
+        <h4 style="color:#2ed573; margin:10px 0 0 0;">🟢 P2 (綠球) 技能</h4>
+        <div class="swipe-container p2-box" id="p2Swipe">
+            <span class="arrow arrow-l">◀</span><div class="skill-title" id="p2Title">💪 巨大</div>
+            <div class="skill-desc" id="p2Desc">每 15 秒體型變大 2 倍且移動加速，持續 10 秒。</div><span class="arrow arrow-r">▶</span>
         </div>
-        <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥 ⚔️</button>
+        <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥</button>
     </div>
     <div id="gameScreen">
         <div id="scoreboard">
-            <div class="player1">紅球 (P1): <span id="hp1">2000</span> HP<div id="st1" class="status-txt"></div></div>
-            <div class="player2">綠球 (P2): <span id="hp2">2000</span> HP<div id="st2" class="status-txt"></div></div>
+            <div style="color:#ff4757">紅球: <span id="hp1">2000</span> HP<div id="st1" style="font-size:10px;color:#aaa"></div></div>
+            <div style="color:#2ed573">綠球: <span id="hp2">2000</span> HP<div id="st2" style="font-size:10px;color:#aaa"></div></div>
         </div>
         <canvas id="gameCanvas" width="600" height="400"></canvas>
     </div>
     <div id="gameOverScreen">
-        <h2 id="winnerText"></h2>
-        <p style="color: #aaa; font-size: 14px; margin-bottom: 20px;">即將返回角色選擇頁面...</p>
-        <button id="backToSelectBtn" onclick="backToSelection()">返回選擇頁面</button>
+        <h3 id="winnerText" style="color:#f1c40f;margin:0 0 15px 0;"></h3>
+        <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff;">返回選擇</button>
     </div>
     <script>
-        const canvas = document.getElementById("gameCanvas"); const ctx = canvas.getContext("2d");
-        const selectionScreen = document.getElementById("selectionScreen"); const gameScreen = document.getElementById("gameScreen");
-        const gameOverScreen = document.getElementById("gameOverScreen"); const winnerText = document.getElementById("winnerText");
-        const hp1Display = document.getElementById("hp1"); const hp2Display = document.getElementById("hp2");
-        const st1Display = document.getElementById("st1"); const st2Display = document.getElementById("st2");
-        let gameActive = false; let obstacles = []; let crows = []; let timers = [];
-        let p1SelectedSkill = 'shield'; let p2SelectedSkill = 'giant';
+        const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
+        const selectionScreen = document.getElementById("selectionScreen"), gameScreen = document.getElementById("gameScreen"), gameOverScreen = document.getElementById("gameOverScreen"), winnerText = document.getElementById("winnerText");
+        const hp1Display = document.getElementById("hp1"), hp2Display = document.getElementById("hp2"), st1Display = document.getElementById("st1"), st2Display = document.getElementById("st2");
+        let gameActive = false, obstacles = [], crows = [], zones = [], timers = [], p1Idx = 0, p2Idx = 1;
         const centerBox = { x: 260, y: 160, width: 80, height: 80, color: "#f1c40f" };
 
-        function selectSkill(player, skill) {
-            if (player === 1) { p1SelectedSkill = skill; const btns = document.querySelectorAll("#p1Box .btn-select"); btns.forEach(b => b.classList.remove("active1")); event.target.classList.add("active1"); } 
-            else { p2SelectedSkill = skill; const btns = document.querySelectorAll("#p2Box .btn-select"); btns.forEach(b => b.classList.remove("active2")); event.target.classList.add("active2"); }
+        const skillsList = [
+            { id: 'shield', title: "🛡️ 護盾", desc: "每 10 秒發動無敵 5 秒，期間不承受任何碰撞傷害。" },
+            { id: 'giant', title: "💪 巨大", desc: "每 15 秒體型變大 2 倍且移動加速，持續 10 秒。" },
+            { id: 'crow', title: "🦅 烏鴉", desc: "每 5 秒召喚一隻穿牆老鷹，自動追蹤並炸擊對手。" },
+            { id: 'block', title: "🧱 障礙", desc: "每 5 秒在身後留下一塊無法被破壞的同體積方塊。" },
+            { id: 'shrine', title: "🌸 祈禱", desc: "每 10 秒召喚櫻花陣(5s)，在陣內可瘋狂回血與加速。" }
+        ];
+
+        function bindSwipe(elementId, player) {
+            const el = document.getElementById(elementId); let startX = 0;
+            el.addEventListener('touchstart', e => startX = e.touches.clientX, {passive: true});
+            el.addEventListener('touchend', e => {
+                let diffX = e.changedTouches.clientX - startX;
+                if (Math.abs(diffX) > 40) {
+                    if (player === 1) { p1Idx = diffX > 0 ? (p1Idx - 1 + skillsList.length) % skillsList.length : (p1Idx + 1) % skillsList.length; updateSwipeUI(1); } 
+                    else { p2Idx = diffX > 0 ? (p2Idx - 1 + skillsList.length) % skillsList.length : (p2Idx + 1) % skillsList.length; updateSwipeUI(2); }
+                }
+            }, {passive: true});
         }
+        function updateSwipeUI(p) {
+            if (p === 1) { document.getElementById("p1Title").innerText = skillsList[p1Idx].title; document.getElementById("p1Desc").innerText = skillsList[p1Idx].desc; } 
+            else { document.getElementById("p2Title").innerText = skillsList[p2Idx].title; document.getElementById("p2Desc").innerText = skillsList[p2Idx].desc; }
+        }
+        bindSwipe("p1Swipe", 1); bindSwipe("p2Swipe", 2);
 
         class Crow {
-            constructor(x, y, target, color) { this.x = x; this.y = y; this.target = target; this.color = color; this.radius = 6; this.speed = 3.5; }
-            move() {
-                let dx = this.target.x - this.x; let dy = this.target.y - this.y; let dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 0) { this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed; }
-            }
-            draw() {
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color === "#ff4757" ? "#ff7675" : "#55efc4"; ctx.fill(); ctx.closePath();
-                ctx.fillStyle = "#fff"; ctx.font = "10px sans-serif"; ctx.fillText("🦅", this.x - 6, this.y + 4);
-            }
+            constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 3.5; }
+            move() { let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy); if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; } }
+            draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color === "#ff4757" ? "#ff7675" : "#55efc4"; ctx.fill(); ctx.closePath(); ctx.fillStyle = "#fff"; ctx.font = "10px sans-serif"; ctx.fillText("🦅", this.x - 6, this.y + 4); }
         }
-
         class Ball {
-            constructor(x, y, color, name, hpElement, statusElement) {
-                this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = color; this.vx = color === "#ff4757" ? 4.5 : -4.5; this.vy = 3.5;
-                this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy); this.hp = 2000; this.name = name; this.hpElement = hpElement; this.statusElement = statusElement; this.isInvincible = false; this.isGiant = false;
-            }
-            draw() {
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
-                if (this.isInvincible) { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI * 2); ctx.strokeStyle = "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); }
-            }
-            move() {
-                this.x += this.vx; this.y += this.vy;
-                if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; } else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; }
-                if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; } else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; }
-            }
-            takeDamage(amount) {
-                if (this.isInvincible) return; this.hp -= amount; if (this.hp < 0) this.hp = 0; this.hpElement.innerText = this.hp;
-                if (this.hp <= 0 && gameActive) { endGame(this.name === "P1" ? " P2 (綠球) 獲勝！" : " P1 (紅球) 獲勝！"); }
-            }
+            constructor(x, y, c, n, h, st) { this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c; this.vx = c === "#ff4757" ? 5 : -5; this.vy = 4; this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy); this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.isInvincible = false; this.isInShrine = false; }
+            draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath(); if (this.isInvincible) { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); } }
+            move() { let currentSpeedMultiplier = this.isInShrine ? 1.5 : 1.0; this.x += this.vx * currentSpeedMultiplier * (this.isGiant ? 0.75 : 0.5); this.y += this.vy * currentSpeedMultiplier * (this.isGiant ? 0.75 : 0.5); if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; } else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; } if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; } else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; } }
+            takeDamage(a) { if (this.isInvincible) return; this.hp -= a; if (this.hp < 0) this.hp = 0; this.hpElement.innerText = this.hp; if (this.hp <= 0 && gameActive) endGame(this.name === "P1" ? "P2 獲勝！" : "P1 獲勝！"); }
+            heal(a) { this.hp += a; if (this.hp > 2000) this.hp = 2000; this.hpElement.innerText = this.hp; }
         }
-        let ball1, ball2;
+        let b1, b2;
 
-        function setupSkill(ball, enemy, skill) {
-            if (skill === 'shield') {
-                ball.statusElement.innerText = "🛡️ 護盾冷卻中";
-                let t = setInterval(() => {
-                    if (!gameActive) return; ball.isInvincible = true; ball.statusElement.innerText = "✨ 無敵中 (5s)！";
-                    let innerT = setTimeout(() => { ball.isInvincible = false; ball.statusElement.innerText = "🛡️ 護盾冷卻中"; }, 5000); timers.push(innerT);
-                }, 10000); timers.push(t);
-            } 
-            else if (skill === 'giant') {
-                ball.statusElement.innerText = "💪 巨大冷卻中";
-                let t = setInterval(() => {
-                    if (!gameActive) return; ball.isGiant = true; ball.radius = ball.baseRadius * 2;
-                    ball.vx = ball.vx > 0 ? ball.baseSpeedX * 1.5 : -ball.baseSpeedX * 1.5; ball.vy = ball.vy > 0 ? ball.baseSpeedY * 1.5 : -ball.baseSpeedY * 1.5;
-                    ball.statusElement.innerText = "⚡ 巨大化加速中 (10s)！";
-                    let innerT = setTimeout(() => { ball.isGiant = false; ball.radius = ball.baseRadius; ball.vx = ball.vx > 0 ? ball.baseSpeedX : -ball.baseSpeedX; ball.vy = ball.vy > 0 ? ball.baseSpeedY : -ball.baseSpeedY; ball.statusElement.innerText = "💪 巨大冷卻中"; }, 10000); timers.push(innerT);
-                }, 15000); timers.push(t);
-            } 
-            else if (skill === 'crow') {
-                ball.statusElement.innerText = "🦅 召喚烏鴉中";
-                let t = setInterval(() => { if (!gameActive) return; crows.push(new Crow(ball.x, ball.y, enemy, ball.color)); }, 5000); timers.push(t);
-            } 
-            else if (skill === 'block') {
-                ball.statusElement.innerText = "🧱 製造障礙中";
-                let t = setInterval(() => {
-                    if (!gameActive) return; let size = ball.radius * 2;
-                    obstacles.push({ x: ball.x - ball.radius, y: ball.y - ball.radius, width: size, height: size, color: ball.color === "#ff4757" ? "#b2bec3" : "#636e72" });
-                }, 10000); timers.push(t);
-            }
+        function setupSkill(b, e, s) {
+            if (s === 'shield') { b.statusElement.innerText = "🛡️ 冷卻中"; let t = setInterval(() => { if (!gameActive) return; b.isInvincible = true; b.statusElement.innerText = "✨ 無敵中!"; let it = setTimeout(() => { b.isInvincible = false; b.statusElement.innerText = "🛡️ 冷卻中"; }, 5000); timers.push(it); }, 10000); timers.push(t); } 
+            else if (s === 'giant') { b.statusElement.innerText = "💪 冷卻中"; let t = setInterval(() => { if (!gameActive) return; b.isGiant = true; b.radius = b.baseRadius * 2; b.vx = b.vx > 0 ? b.baseSpeedX * 1.5 : -b.baseSpeedX * 1.5; b.vy = b.vy > 0 ? b.baseSpeedY * 1.5 : -b.baseSpeedY * 1.5; b.statusElement.innerText = "⚡ 巨大化!"; let it = setTimeout(() => { b.isGiant = false; b.radius = b.baseRadius; b.vx = b.vx > 0 ? b.baseSpeedX : -b.baseSpeedX; b.vy = b.vy > 0 ? b.baseSpeedY : -b.baseSpeedY; b.statusElement.innerText = "💪 冷卻中"; }, 10000); timers.push(it); }, 15000); timers.push(t); } 
+            else if (s === 'crow') { b.statusElement.innerText = "🦅 召喚中"; let t = setInterval(() => { if (!gameActive) return; crows.push(new Crow(b.x, b.y, e, b.color)); }, 5000); timers.push(t); } 
+            else if (s === 'block') { b.statusElement.innerText = "🧱 製造中"; let t = setInterval(() => { if (!gameActive) return; let size = b.radius * 2; obstacles.push({ x: b.x - b.radius, y: b.y - b.radius, width: size, height: size, color: b.color === "#ff4757" ? "#b2bec3" : "#636e72" }); }, 5000); timers.push(t); }
+            else if (s === 'shrine') { b.statusElement.innerText = "🌸 祈禱冷卻中"; let t = setInterval(() => { if (!gameActive) return; let zX = Math.random() * (canvas.width - 160) + 80, zY = Math.random() * (canvas.height - 160) + 80; zones.push({ x: zX, y: zY, radius: 60, owner: b }); b.statusElement.innerText = "🌸 結界展開!"; let it = setTimeout(() => { zones = zones.filter(z => z.owner !== b); b.statusElement.innerText = "🌸 祈禱冷卻中"; }, 5000); timers.push(it); }, 10000); timers.push(t); }
         }
 
-        function startGame() {
-            selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true;
-            ball1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display); ball2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display);
-            hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; timers = [];
-            setupSkill(ball1, ball2, p1SelectedSkill); setupSkill(ball2, ball1, p2SelectedSkill); gameLoop();
-        }
-
-        function checkBallRectCollision(ball, rect) {
-            let closestX = Math.max(rect.x, Math.min(ball.x, rect.x + rect.width)); let closestY = Math.max(rect.y, Math.min(ball.y, rect.y + rect.height));
-            let dx = ball.x - closestX; let dy = ball.y - closestY; let distSq = (dx * dx) + (dy * dy);
-            if (distSq < (ball.radius * ball.radius)) {
-                let dist = Math.sqrt(distSq); if (dist === 0) return; 
-                ball.x += (dx / dist) * (ball.radius - dist); ball.y += (dy / dist) * (ball.radius - dist);
-                if (Math.abs(dx / dist) > Math.abs(dy / dist)) { ball.vx = -ball.vx; } else { ball.vy = -ball.vy; }
-            }
-        }
-
-        function checkBallCollision(b1, b2) {
-            let dx = b2.x - b1.x; let dy = b2.y - b1.y; let dist = Math.sqrt(dx * dx + dy * dy); let minDist = b1.radius + b2.radius;
-            if (dist < minDist) {
-                let dmg1 = Math.floor(Math.random() * 151) + 150; let dmg2 = Math.floor(Math.random() * 151) + 150; b1.takeDamage(dmg1); b2.takeDamage(dmg2);
-                let nx = dx / dist; let ny = dy / dist; let overlap = minDist - dist;
-                b1.x -= nx * (overlap / 2); b1.y -= ny * (overlap / 2); b2.x += nx * (overlap / 2); b2.y += ny * (overlap / 2);
-                let kx = b1.vx - b2.vx; let ky = b1.vy - b2.vy; let p = nx * kx + ny * ky;
-                if (p > 0) { b1.vx -= p * nx; b1.vy -= p * ny; b2.vx += p * nx; b2.vy += p * ny; }
-            }
-        }
-
-        function gameLoop() {
-            if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height);
-            obstacles.forEach(rect => { ctx.fillStyle = rect.color; ctx.fillRect(rect.x, rect.y, rect.width, rect.height); checkBallRectCollision(ball1, rect); checkBallRectCollision(ball2, rect); });
-            for (let i = crows.length - 1; i >= 0; i--) {
-                let crow = crows[i]; crow.move(); crow.draw(); let tdx = crow.target.x - crow.x; let tdy = crow.target.y - crow.y; let tdist = Math.sqrt(tdx * tdx + tdy * tdy);
-                if (tdist < crow.target.radius + crow.radius) { crow.target.takeDamage(200); crows.splice(i, 1); }
-            }
-            ball1.move(); ball2.move(); checkBallCollision(ball1, ball2); ball1.draw(); ball2.draw(); requestAnimationFrame(gameLoop);
-        }
-
-        function endGame(message) { gameActive = false; timers.forEach(t => { clearInterval(t); clearTimeout(t); }); winnerText.innerText = message; gameOverScreen.style.display = "block"; }
+        function startGame() { selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true; b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display); b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display); hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; zones = []; timers = []; setupSkill(b1, b2, skillsList[p1Idx].id); setupSkill(b2, b1, skillsList[p2Idx].id); gameLoop(); }
+        function checkBallRectCollision(b, r) { let cx = Math.max(r.x, Math.min(b.x, r.x + r.width)), cy = Math.max(r.y, Math.min(b.y, r.y + r.height)), dx = b.x - cx, dy = b.y - cy, dSq = (dx*dx)+(dy*dy); if (dSq < (b.radius*b.radius)) { let d = Math.sqrt(dSq); if (d === 0) return; b.x += (dx/d)*(b.radius-d); b.y += (dy/d)*(b.radius-d); if (Math.abs(dx/d) > Math.abs(dy/d)) { b.vx = -b.vx; } else { b.vy = -b.vy; } } }
+        function checkBallCollision(ball1, ball2) { let dx = ball2.x - ball1.x, dy = ball2.y - ball1.y, d = Math.sqrt(dx*dx + dy*dy), minDist = ball1.radius + ball2.radius; if (d < minDist) { let dmg1 = Math.floor(Math.random()*151)+150, dmg2 = Math.floor(Math.random()*151)+150; ball1.takeDamage(dmg1); ball2.takeDamage(dmg2); let nx = dx/d, ny = dy/d, o = minDist - d; ball1.x -= nx*(o/2); ball1.y -= ny*(o/2); ball2.x += nx*(o/2); ball2.y += ny*(o/2); let kx = ball1.vx - ball2.vx, ky = ball1.vy - ball2.vy, p = nx*kx + ny*ky; if (p > 0) { ball1.vx -= p*nx; ball1.vy -= p*ny; ball2.vx += p*nx; ball2.vy += p*ny; } } }
+        function gameLoop() { if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height); b1.isInShrine = false; b2.isInShrine = false; zones.forEach(z => { ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.fillStyle = "rgba(255, 121, 121, 0.15)"; ctx.fill(); ctx.strokeStyle = "rgba(255, 159, 243, 0.6)"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath(); ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.font = "12px sans-serif"; ctx.fillText("🌸", z.x - 6, z.y + 5); let zdx = z.owner.x - z.x, zdy = z.owner.y - z.y, zdist = Math.sqrt(zdx*zdx + zdy*zdy); if (zdist < z.radius) { z.owner.isInShrine = true; z.owner.heal(3); } }); obstacles.forEach(r => { ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.width, r.height); checkBallRectCollision(b1, r); checkBallRectCollision(b2, r); }); for (let i = crows.length - 1; i >= 0; i--) { let c = crows[i]; c.move(); c.draw(); let tdx = c.target.x - c.x, tdy = c.target.y - c.y, td = Math.sqrt(tdx*tdx + tdy*tdy); if (td < c.target.radius + c.radius) { c.target.takeDamage(220); crows.splice(i, 1); } } b1.move(); b2.move(); checkBallCollision(b1, b2); b1.draw(); b2.draw(); requestAnimationFrame(gameLoop); }
+        function endGame(m) { gameActive = false; timers.forEach(t => { clearInterval(t); clearTimeout(t); }); winnerText.innerText = m; gameOverScreen.style.display = "block"; }
         function backToSelection() { gameOverScreen.style.display = "none"; gameScreen.style.display = "none"; selectionScreen.style.display = "flex"; }
     </script>
 </body>
 </html>
-
