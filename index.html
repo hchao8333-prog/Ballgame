@@ -1,20 +1,21 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙球生存對決-手機點滑版</title>
+    <title>雙球生存對決-手機點選版</title>
     <style>
         * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
         body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         #selectionScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; background: #111; z-index: 10; position: absolute; padding: 15px; }
-        .swipe-container { width: 100%; max-width: 320px; background: #222; border-radius: 16px; padding: 15px 40px; margin: 10px 0; text-align: center; position: relative; touch-action: none; }
+        .swipe-container { width: 100%; max-width: 320px; background: #222; border-radius: 16px; padding: 15px 50px; margin: 10px 0; text-align: center; position: relative; }
         .p1-box { border: 2px solid #ff4757; } .p2-box { border: 2px solid #2ed573; }
         .skill-title { font-size: 20px; font-weight: bold; margin: 5px 0; color: #fff; }
         .skill-desc { font-size: 13px; color: #aaa; min-height: 36px; }
-        .arrow { font-size: 24px; color: #f1c40f; position: absolute; top: 50%; transform: translateY(-50%); font-weight: bold; padding: 10px; cursor: pointer; z-index: 15; }
-        .arrow-l { left: 5px; } .arrow-r { right: 5px; }
-        #startBtn { margin-top: 15px; width: 100%; max-width: 200px; padding: 14px; font-size: 18px; font-weight: bold; background: #f1c40f; border: none; border-radius: 25px; }
+        /* 寬大好點擊的手機專用方向鈕 */
+        .arrow { font-size: 26px; color: #f1c40f; position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; width: 45px; cursor: pointer; font-weight: bold; background: rgba(255,255,255,0.02); }
+        .arrow-l { left: 0; border-radius: 16px 0 0 16px; } .arrow-r { right: 0; border-radius: 0 16px 16px 0; }
+        .arrow:active { background: rgba(241,196,15,0.2); }
+        #startBtn { margin-top: 15px; width: 100%; max-width: 200px; padding: 14px; font-size: 18px; font-weight: bold; background: #f1c40f; border: none; border-radius: 25px; color: #000; box-shadow: 0 4px 10px rgba(241,196,15,0.3); }
         #gameScreen { display: none; flex-direction: column; align-items: center; width: 100vw; }
         #scoreboard { display: flex; justify-content: space-around; width: 100%; max-width: 500px; font-size: 14px; font-weight: bold; margin-bottom: 5px; text-align: center; }
         canvas { border: 2px solid #fff; background: #050505; max-width: 95vw; max-height: 65vh; }
@@ -23,20 +24,20 @@
 </head>
 <body>
     <div id="selectionScreen">
-        <h3 style="color:#f1c40f; margin:0 0 5px 0;">⚔️ 滑動或點擊箭頭選角 ⚔️</h3>
+        <h3 style="color:#f1c40f; margin:0 0 5px 0;">⚔️ 點擊黃色箭頭選擇技能 ⚔️</h3>
         <h4 style="color:#ff4757; margin:5px 0 0 0;">🔴 P1 (紅球) 技能</h4>
-        <div class="swipe-container p1-box" id="p1Swipe">
-            <span class="arrow arrow-l" onclick="changeSkill(1, -1)">◀</span>
+        <div class="swipe-container p1-box">
+            <div class="arrow arrow-l" onclick="changeSkill(1, -1)">◀</div>
             <div class="skill-title" id="p1Title">🛡️ 護盾</div>
             <div class="skill-desc" id="p1Desc">每 10 秒發動無敵 5 秒，期間不承受任何碰撞傷害。</div>
-            <span class="arrow arrow-r" onclick="changeSkill(1, 1)">▶</span>
+            <div class="arrow arrow-r" onclick="changeSkill(1, 1)">▶</div>
         </div>
         <h4 style="color:#2ed573; margin:10px 0 0 0;">🟢 P2 (綠球) 技能</h4>
-        <div class="swipe-container p2-box" id="p2Swipe">
-            <span class="arrow arrow-l" onclick="changeSkill(2, -1)">◀</span>
+        <div class="swipe-container p2-box">
+            <div class="arrow arrow-l" onclick="changeSkill(2, -1)">◀</div>
             <div class="skill-title" id="p2Title">💪 巨大</div>
             <div class="skill-desc" id="p2Desc">每 15 秒體型變大 2 倍且移動加速，持續 10 秒。</div>
-            <span class="arrow arrow-r" onclick="changeSkill(2, 1)">▶</span>
+            <div class="arrow arrow-r" onclick="changeSkill(2, 1)">▶</div>
         </div>
         <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥</button>
     </div>
@@ -49,7 +50,7 @@
     </div>
     <div id="gameOverScreen">
         <h3 id="winnerText" style="color:#f1c40f;margin:0 0 15px 0;"></h3>
-        <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff;">返回選擇</button>
+        <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff; color:#000;">返回選擇</button>
     </div>
     <script>
         const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
@@ -66,27 +67,16 @@
             { id: 'shrine', title: "🌸 祈禱", desc: "每 10 秒召喚櫻花陣(5s)，在陣內可瘋狂回血與加速。" }
         ];
 
-        // 點擊箭頭切換
+        // 點擊箭頭按鈕切換技能
         function changeSkill(player, dir) {
             if (player === 1) { p1Idx = (p1Idx + dir + skillsList.length) % skillsList.length; updateSwipeUI(1); } 
             else { p2Idx = (p2Idx + dir + skillsList.length) % skillsList.length; updateSwipeUI(2); }
         }
 
-        // 手機滑動切換 (補強觸控阻斷)
-        function bindSwipe(elementId, player) {
-            const el = document.getElementById(elementId); let startX = 0;
-            el.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive: true});
-            el.addEventListener('touchmove', e => { if(e.cancelable) e.preventDefault(); }, {passive: false}); // 阻止視窗滾動卡死
-            el.addEventListener('touchend', e => {
-                let diffX = e.changedTouches[0].clientX - startX;
-                if (Math.abs(diffX) > 30) { changeSkill(player, diffX > 0 ? -1 : 1); }
-            }, {passive: true});
-        }
         function updateSwipeUI(p) {
             if (p === 1) { document.getElementById("p1Title").innerText = skillsList[p1Idx].title; document.getElementById("p1Desc").innerText = skillsList[p1Idx].desc; } 
             else { document.getElementById("p2Title").innerText = skillsList[p2Idx].title; document.getElementById("p2Desc").innerText = skillsList[p2Idx].desc; }
         }
-        bindSwipe("p1Swipe", 1); bindSwipe("p2Swipe", 2);
 
         class Crow {
             constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 3.5; }
