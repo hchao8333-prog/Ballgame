@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -23,21 +24,21 @@
         <div class="player-menu-box p1-box">
             <h4 style="color:#ff4757; margin:0 0 8px 0;">🔴 玩家 1 (紅球)</h4>
             <select id="p1Select">
-                <option value="shield">🛡️ 護盾 (無敵 5 秒)</option>
-                <option value="giant">💪 巨大 (變大加速 10 秒)</option>
-                <option value="crow">🦅 烏鴉 (穿牆追蹤敵人)</option>
-                <option value="block">🧱 障礙 (5秒放一個方塊)</option>
-                <option value="shrine">🌸 祈禱 (陣內回血加速)</option>
+                <option value="shield">🛡️ 護盾 (蓄能反彈傷)</option>
+                <option value="giant">💪 巨大 (2倍超巨大暴走)</option>
+                <option value="crow">🦅 烏鴉 (穿牆咬碎方塊)</option>
+                <option value="block">🧱 障礙 (全場方塊引爆傷)</option>
+                <option value="shrine" selected>🌸 祈禱 (月神降臨全場轟炸)</option>
             </select>
         </div>
         <div class="player-menu-box p2-box">
             <h4 style="color:#2ed573; margin:0 0 8px 0;">🟢 玩家 2 (綠球)</h4>
             <select id="p2Select">
-                <option value="shield">🛡️ 護盾 (無敵 5 秒)</option>
-                <option value="giant" selected>💪 巨大 (變大加速 10 秒)</option>
-                <option value="crow">🦅 烏鴉 (穿牆追蹤敵人)</option>
-                <option value="block">🧱 障礙 (5秒放一個方塊)</option>
-                <option value="shrine">🌸 祈禱 (陣內回血加速)</option>
+                <option value="shield">🛡️ 護盾 (蓄能反彈傷)</option>
+                <option value="giant">💪 巨大 (2倍超巨大暴走)</option>
+                <option value="crow" selected>🦅 烏鴉 (穿牆咬碎方塊)</option>
+                <option value="block">🧱 障礙 (全場方塊引爆傷)</option>
+                <option value="shrine">🌸 祈禱 (月神降臨全場轟炸)</option>
             </select>
         </div>
         <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥 ⚔️</button>
@@ -58,11 +59,122 @@
         const selectionScreen = document.getElementById("selectionScreen"), gameScreen = document.getElementById("gameScreen"), gameOverScreen = document.getElementById("gameOverScreen"), winnerText = document.getElementById("winnerText");
         const hp1Display = document.getElementById("hp1"), hp2Display = document.getElementById("hp2"), st1Display = document.getElementById("st1"), st2Display = document.getElementById("st2");
         
-        let gameActive = false, obstacles = [], crows = [], zones = [], timers = [];
-        let b1, b2, isAwake1 = false, isAwake2 = false, lunarTimer1 = null, lunarTimer2 = null;
+        let gameActive = false, obstacles = [], crows = [], zones = [], timers = [], lunars = [], explosions = [];
+        let b1, b2;
         const centerBox = { x: 260, y: 160, width: 80, height: 80, color: "#f1c40f" };
 
         let audioCtx = null, bgmInterval = null;
+
+        class Crow {
+            constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 5; this.isBreaker = false; }
+            move() { 
+                let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy); 
+                if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; } 
+            }
+            draw() {
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+                ctx.fillStyle = this.isBreaker ? "#f1c40f" : (this.color === "#ff4757" ? "#ff7675" : "#55efc4"); ctx.fill(); ctx.closePath();
+                ctx.fillStyle = "#fff"; ctx.font = this.isBreaker ? "12px sans-serif" : "10px sans-serif"; ctx.fillText(this.isBreaker ? "👑" : "🦅", this.x - 6, this.y + 4);
+            }
+        }
+
+        class LunarBullet {
+            constructor(x, y, t) { this.x = x; this.y = y; this.target = t; this.radius = 4; this.speed = 4.5; }
+            move() {
+                let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy);
+                if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; }
+            }
+            draw() {
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = "#f1c40f"; ctx.fill(); ctx.closePath();
+            }
+        }
+
+        class LunarHealBullet {
+            constructor(x, y, t) { this.x = x; this.y = y; this.target = t; this.radius = 4; this.speed = 4.0; }
+            move() {
+                let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy);
+                if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; }
+            }
+            draw() {
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = "#2ed573"; ctx.fill(); ctx.closePath();
+            }
+        }
+
+        class LunarGod {
+            constructor(x, y, owner, target) { this.x = x; this.y = y; this.owner = owner; this.target = target; this.bullets = []; this.healBullets = []; this.shootCd = 0; }
+            update() {
+                this.shootCd++;
+                if (this.shootCd >= 25) { 
+                    this.bullets.push(new LunarBullet(this.x, this.y, this.target));
+                    this.healBullets.push(new LunarHealBullet(this.x, this.y, this.owner));
+                    this.shootCd = 0; playSound(587, 'sine', 0.05, 0.03);
+                }
+                for (let i = this.bullets.length - 1; i >= 0; i--) {
+                    let b = this.bullets[i]; b.move(); b.draw();
+                    let dx = b.target.x - b.x, dy = b.target.y - b.y;
+                    if (Math.sqrt(dx*dx + dy*dy) < b.target.radius + b.radius) {
+                        if (!b.target.isInvincible) b.target.hp -= 25; 
+                        this.bullets.splice(i, 1); playSound(220, 'sine', 0.05, 0.05);
+                    }
+                }
+                for (let i = this.healBullets.length - 1; i >= 0; i--) {
+                    let hb = this.healBullets[i]; hb.move(); hb.draw();
+                    let dx = hb.target.x - hb.x, dy = hb.target.y - hb.y;
+                    if (Math.sqrt(dx*dx + dy*dy) < hb.target.radius + hb.radius) {
+                        hb.target.hp = Math.min(2000, hb.target.hp + 40); 
+                        this.healBullets.splice(i, 1); playSound(440, 'sine', 0.04, 0.02);
+                    }
+                }
+            }
+            draw() {
+                ctx.fillStyle = "#fff"; ctx.font = "24px sans-serif"; ctx.fillText("🌙", this.x - 12, this.y + 8);
+                ctx.beginPath(); ctx.arc(this.x, this.y, 25, 0, Math.PI*2); ctx.strokeStyle = "rgba(241, 196, 15, 0.5)"; ctx.lineWidth = 1.5; ctx.stroke(); ctx.closePath();
+            }
+        }
+
+        class Ball {
+            constructor(x, y, c, n, h, st, skill) {
+                this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c;
+                this.vx = c === "#ff4757" ? 10.5 : -10.5; this.vy = 7;
+                this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy);
+                this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.skillType = skill;
+                this.isInvincible = false; this.isInShrine = false; this.isGiant = false; this.isAwake = false; this.speedDebuff = 1.0; this.reflectActive = false; 
+            }
+            draw() {
+                if (this.isAwake) {
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 12, 0, Math.PI*2); ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 4; ctx.stroke(); ctx.closePath();
+                }
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
+                if (this.isInvincible) { 
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = this.reflectActive ? "#f1c40f" : "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); 
+                }
+            }
+            move() {
+                if (this.hp <= 1000 && !this.isAwake) {
+                    this.isAwake = true; playSound(987, 'sawtooth', 0.5, 0.25); triggerUltimateSkill(this, this === b1 ? b2 : b1);
+                }
+                let currentSpeedMultiplier = (this.isInShrine ? 1.5 : 1.0) * this.speedDebuff;
+                this.x += this.vx * currentSpeedMultiplier; this.y += this.vy * currentSpeedMultiplier;
+                
+                if (this.x - this.radius < 0) { this.x = this.radius; this.vx = Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); } 
+                else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); }
+                if (this.y - this.radius < 0) { this.y = this.radius; this.vy = Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
+                else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
+
+                if (this.x + this.radius > centerBox.x && this.x - this.radius < centerBox.x + centerBox.width && this.y + this.radius > centerBox.y && this.y - this.radius < centerBox.y + centerBox.height) {
+                    let overlapX = Math.min(this.x + this.radius - centerBox.x, centerBox.x + centerBox.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - centerBox.y, centerBox.y + centerBox.height - (this.y - this.radius));
+                    if (overlapX < overlapY) { this.vx = this.x < centerBox.x + centerBox.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < centerBox.y + centerBox.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
+                    playSound(440, 'triangle', 0.05, 0.05);
+                }
+                obstacles.forEach((obs) => {
+                    if (this.x + this.radius > obs.x && this.x - this.radius < obs.x + obs.width && this.y + this.radius > obs.y && this.y - this.radius < obs.y + obs.height) {
+                        let overlapX = Math.min(this.x + this.radius - obs.x, obs.x + obs.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - obs.y, obs.y + obs.height - (this.y - this.radius));
+                        if (overlapX < overlapY) { this.vx = this.x < obs.x + obs.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < obs.y + obs.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
+                        playSound(290, 'triangle', 0.04, 0.04);
+                    }
+                });
+            }
+        }
         function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
         function playSound(freq, type, duration, vol) {
             if (!audioCtx) return; try {
@@ -83,156 +195,137 @@
             }, 220);
         }
 
-        class Crow {
-            constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 4; this.isBreaker = false; }
-            move() { let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy); if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; } }
-            draw() {
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-                ctx.fillStyle = this.isBreaker ? "#f1c40f" : (this.color === "#ff4757" ? "#ff7675" : "#55efc4"); ctx.fill(); ctx.closePath();
-                ctx.fillStyle = "#fff"; ctx.font = "10px sans-serif"; ctx.fillText(this.isBreaker ? "👑" : "🦅", this.x - 6, this.y + 4);
+        function triggerUltimateSkill(ball, opponent) {
+            ball.baseRadius = 22; ball.radius = ball.isGiant ? ball.radius : 22;
+            if (ball.skillType === 'shield') {
+                ball.isInvincible = true; ball.reflectActive = true; ball.statusElement.innerText = "🚨 覺醒：全傷害反彈！";
+                setTimeout(() => { ball.isInvincible = false; ball.reflectActive = false; }, 6000);
+            } else if (ball.skillType === 'giant') {
+                ball.isGiant = true; ball.radius = ball.baseRadius * 4; ball.vx *= 2.0; ball.vy *= 2.0; ball.statusElement.innerText = "👑 覺醒：兩倍泰坦暴走！";
+                setTimeout(() => {
+                    ball.isGiant = false; ball.radius = ball.baseRadius;
+                    ball.vx = ball.vx > 0 ? ball.baseSpeedX * 1.3 : -ball.baseSpeedX * 1.3; ball.vy = ball.vy > 0 ? ball.baseSpeedY * 1.3 : -ball.baseSpeedY * 1.3;
+                }, 10000);
+            } else if (ball.skillType === 'crow') {
+                ball.statusElement.innerText = "🦅 覺醒：破滅召喚！";
+                let cr = new Crow(ball.x, ball.y, opponent, ball.color); cr.isBreaker = true; cr.speed = 7; cr.radius = 12; crows.push(cr);
+            } else if (ball.skillType === 'block') {
+                ball.statusElement.innerText = "🧱 覺醒：全場方塊引爆！";
+                let myObs = obstacles.filter(o => o.owner === ball);
+                myObs.forEach(obs => {
+                    explosions.push({ x: obs.x + obs.width/2, y: obs.y + obs.height/2, radius: 90, timer: 15 });
+                    let dx = opponent.x - (obs.x + obs.width/2), dy = opponent.y - (obs.y + obs.height/2);
+                    if (Math.sqrt(dx*dx + dy*dy) < 90 + opponent.radius && !opponent.isInvincible) opponent.hp -= 350;
+                });
+                obstacles = obstacles.filter(o => o.owner !== ball); playSound(100, 'sawtooth', 0.4, 0.3);
+            } else if (ball.skillType === 'shrine') {
+                ball.statusElement.innerText = "🌙 覺醒：月神臨世(自帶回血)！"; lunars.push(new LunarGod(ball.x, ball.y, ball, opponent));
             }
         }
 
-        class Ball {
-            constructor(x, y, c, n, h, st, skill) {
-                this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c;
-                this.vx = c === "#ff4757" ? 7.5 : -7.5; this.vy = 5;
-                this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy);
-                this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.skillType = skill;
-                this.isInvincible = false; this.isInShrine = false; this.isGiant = false;
-            }
-            draw() {
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
-                if (this.isInvincible) { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); }
-            }
-            move() {
-                let currentSpeedMultiplier = this.isInShrine ? 1.5 : 1.0;
-                this.x += this.vx * currentSpeedMultiplier; this.y += this.vy * currentSpeedMultiplier;
-                if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; playSound(349, 'triangle', 0.04, 0.03); } 
-                else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; playSound(349, 'triangle', 0.04, 0.03); }
-                if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; playSound(349, 'triangle', 0.04, 0.03); } 
-                else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; playSound(349, 'triangle', 0.04, 0.03); }
-            }
-            takeDamage(a) { if (this.isInvincible) return; this.hp -= a; if (this.hp < 0) this.hp = 0; this.hpElement.innerText = this.hp; if (this.hp <= 0 && gameActive) endGame(this.name === "P1" ? "玩家 2 獲勝！" : "玩家 1 獲勝！"); }
-            heal(a) { this.hp += a; if (this.hp > 2000) this.hp = 2000; this.hpElement.innerText = this.hp; }
-        }
-        function setupSkill(b, e, s) {
-            if (s === 'shield') {
-                b.statusElement.innerText = "🛡️ 冷卻中";
-                let t = setInterval(() => { if (!gameActive) return; b.isInvincible = true; b.statusElement.innerText = "✨ 無敵中!"; playSound(880, 'sine', 0.3, 0.05); let it = setTimeout(() => { b.isInvincible = false; b.statusElement.innerText = "🛡️ 冷卻中"; }, 5000); timers.push(it); }, 10000); timers.push(t);
-            } 
-            else if (s === 'giant') {
-                b.statusElement.innerText = "💪 冷卻中";
-                let t = setInterval(() => {
-                    if (!gameActive) return; b.isGiant = true;
-                    let mult = (b.hp <= 1000) ? 4 : 2, speedMult = (b.hp <= 1000) ? 3 : 1.5;
-                    b.radius = b.baseRadius * mult; b.vx = b.vx > 0 ? b.baseSpeedX * speedMult : -b.baseSpeedX * speedMult; b.vy = b.vy > 0 ? b.baseSpeedY * speedMult : -b.baseSpeedY * speedMult;
-                    b.statusElement.innerText = (b.hp <= 1000) ? "👹 滅世巨大化！" : "⚡ 巨大化!"; playSound(220, 'sawtooth', 0.4, 0.04);
-                    let it = setTimeout(() => { b.isGiant = false; b.radius = b.baseRadius; b.vx = b.vx > 0 ? b.baseSpeedX : -b.baseSpeedX; b.vy = b.vy > 0 ? b.baseSpeedY : -b.baseSpeedY; b.statusElement.innerText = "💪 冷卻中"; }, 10000); timers.push(it);
-                }, 15000); timers.push(t);
-            } 
-            else if (s === 'crow') {
-                b.statusElement.innerText = "🦅 召喚中 (10s)";
-                let t = setInterval(() => {
-                    if (!gameActive) return; let c = new Crow(b.x, b.y, e, b.color);
-                    if (b.hp <= 1000) { c.isBreaker = true; c.speed = 5; } crows.push(c);
-                }, 10000); timers.push(t);
-            } 
-            else if (s === 'block') {
-                b.statusElement.innerText = "🧱 製造中";
-                let t = setInterval(() => {
-                    if (!gameActive) return; let size = b.radius * 2;
-                    obstacles.push({ x: b.x - b.radius, y: b.y - b.radius, width: size, height: size, color: b.color === "#ff4757" ? "#b2bec3" : "#636e72" });
-                    playSound(440, 'triangle', 0.1, 0.03); if (obstacles.length > 6) { obstacles.splice(1, 1); }
-                }, 5000); timers.push(t);
-            }
-            else if (s === 'shrine') {
-                b.statusElement.innerText = "🌸 祈禱冷卻中";
-                let t = setInterval(() => {
-                    if (!gameActive) return; let zX = Math.random() * (canvas.width - 240) + 120, zY = Math.random() * (canvas.height - 240) + 120;
-                    zones.push({ x: zX, y: zY, radius: 90, owner: b }); b.statusElement.innerText = "🌸 結界展開!";
-                    let it = setTimeout(() => { zones = zones.filter(z => z.owner !== b); b.statusElement.innerText = "🌸 祈禱冷卻中"; }, 5000); timers.push(it);
-                }, 10000); timers.push(t);
+        function checkBallCollision() {
+            let dx = b2.x - b1.x, dy = b2.y - b1.y, dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < b1.radius + b2.radius) {
+                let normalX = dx / dist, normalY = dy / dist, kx = b1.vx - b2.vx, ky = b1.vy - b2.vy;
+                let p = 2 * (normalX * kx + normalY * ky) / 2; b1.vx -= p * normalX; b1.vy -= p * normalY; b2.vx += p * normalX; b2.vy += p * normalY;
+                let d1 = b2.isGiant ? 160 : 80, d2 = b1.isGiant ? 160 : 80;
+                if (b2.isAwake) d1 *= 1.3; if (b1.isAwake) d2 *= 1.3;
+                if (b1.isInvincible) { if (b1.reflectActive && !b2.isInvincible) b2.hp -= Math.floor(d1); d1 = 0; }
+                if (b2.isInvincible) { if (b2.reflectActive && !b1.isInvincible) b1.hp -= Math.floor(d2); d2 = 0; }
+                b1.hp -= Math.floor(d1); b2.hp -= Math.floor(d2); playSound(150, 'sawtooth', 0.15, 0.15);
             }
         }
 
-        function triggerAwakeInstant(b, e) {
-            playSound(120, 'sawtooth', 0.5, 0.15);
-            if (b.skillType === 'block') {
-                let count = obstacles.length - 1;
-                if (count > 0) { e.takeDamage(count * 150); obstacles = [centerBox]; playSound(100, 'sawtooth', 0.5, 0.2); }
-            }
-            if (b.skillType === 'shrine') {
-                let timer = setInterval(() => { if (!gameActive) return; e.takeDamage(70); b.heal(30); playSound(700, 'sine', 0.05, 0.02); }, 1000);
-                timers.push(timer); if(b.name === "P1") lunarTimer1 = timer; else lunarTimer2 = timer;
-            }
+        function startSkillLoop(ball, opponent) {
+            let cd = ball.skillType === 'crow' ? 10000 : 5000;
+            let timer = setInterval(() => { if (gameActive) executeSkill(ball, opponent); }, cd);
+            timers.push(timer);
         }
 
-        function drawLunarGod(b, e) {
-            ctx.save(); ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, 25, 0, Math.PI * 2); ctx.fillStyle = "rgba(155, 89, 182, 0.3)"; ctx.fill(); ctx.strokeStyle = "#9b59b6"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
-            ctx.fillStyle = "#fff"; ctx.font = "14px sans-serif"; ctx.fillText("🌙", canvas.width/2 - 7, canvas.height/2 + 5);
-            ctx.beginPath(); ctx.moveTo(canvas.width/2, canvas.height/2); ctx.lineTo(e.x, e.y); ctx.strokeStyle = "rgba(231, 76, 60, 0.4)"; ctx.lineWidth = 3; ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(canvas.width/2, canvas.height/2); ctx.lineTo(b.x, b.y); ctx.strokeStyle = "rgba(46, 204, 113, 0.4)"; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
-        }
-
-        function startGame() {
-            initAudio(); if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-            const s1 = document.getElementById("p1Select").value, s2 = document.getElementById("p2Select").value;
-            selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true; isAwake1 = false; isAwake2 = false; lunarTimer1 = null; lunarTimer2 = null;
-            b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display, s1); b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display, s2);
-            hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; zones = []; timers = [];
-            setupSkill(b1, b2, s1); setupSkill(b2, b1, s2); startBGM(); gameLoop();
-        }
-
-        function checkBallRectCollision(b, r) {
-            let closestX = Math.max(r.x, Math.min(b.x, r.x + r.width)), closestY = Math.max(r.y, Math.min(b.y, r.y + r.height)), dx = b.x - closestX, dy = b.y - closestY, dSq = (dx*dx)+(dy*dy);
-            if (dSq < (b.radius*b.radius)) {
-                let d = Math.sqrt(dSq); if (d === 0) return; b.x += (dx/d)*(b.radius-d); b.y += (dy/d)*(b.radius-d);
-                if (Math.abs(dx/d) > Math.abs(dy/d)) { b.vx = -b.vx; } else { b.vy = -b.vy; } playSound(300, 'triangle', 0.05, 0.05);
-            }
-        }
-
-        function checkBallCollision(ball1, ball2) {
-            let dx = ball2.x - ball1.x, dy = ball2.y - ball1.y, d = Math.sqrt(dx*dx + dy*dy), minDist = ball1.radius + ball2.radius;
-            if (d < minDist) {
-                let dmg1 = Math.floor(Math.random()*151)+150, dmg2 = Math.floor(Math.random()*151)+150;
-                if (ball1.isInvincible && ball1.skillType === 'shield' && ball1.hp <= 1000) { ball2.takeDamage(dmg1); dmg1 = 0; }
-                if (ball2.isInvincible && ball2.skillType === 'shield' && ball2.hp <= 1000) { ball1.takeDamage(dmg2); dmg2 = 0; }
-                ball1.takeDamage(dmg1); ball2.takeDamage(dmg2);
-                let nx = dx/d, ny = dy/d, o = minDist - d; ball1.x -= nx*(o/2); ball1.y -= ny*(o/2); ball2.x += nx*(o/2); ball2.y += ny*(o/2);
-                let kx = ball1.vx - ball2.vx, ky = ball1.vy - ball2.vy, p = nx*kx + ny*ky; if (p > 0) { ball1.vx -= p*nx; ball1.vy -= p*ny; ball2.vx += p*nx; ball2.vy += p*ny; }
-                playSound(600, 'square', 0.15, 0.08);
+        function executeSkill(ball, opponent) {
+            if(ball.statusElement.innerText === "") ball.statusElement.innerText = "技能發動!";
+            setTimeout(() => { if(!ball.isAwake) ball.statusElement.innerText = ""; }, 1500);
+            if (ball.skillType === 'shield') {
+                ball.isInvincible = true; setTimeout(() => ball.isInvincible = false, 5000);
+            } else if (ball.skillType === 'giant') {
+                ball.isGiant = true; ball.radius = ball.baseRadius * 2; ball.vx *= 1.4; ball.vy *= 1.4;
+                setTimeout(() => {
+                    ball.isGiant = false; ball.radius = ball.baseRadius;
+                    ball.vx = ball.vx > 0 ? ball.baseSpeedX : -ball.baseSpeedX; ball.vy = ball.vy > 0 ? ball.baseSpeedY : -ball.baseSpeedY;
+                }, 10000);
+            } else if (ball.skillType === 'crow') {
+                crows.push(new Crow(ball.x, ball.y, opponent, ball.color));
+            } else if (ball.skillType === 'block') {
+                obstacles.push({ x: ball.x - 20, y: ball.y - 20, width: 40, height: 40, owner: ball });
+                if (obstacles.length > 5) obstacles.shift();
+            } else if (ball.skillType === 'shrine') {
+                let zRadius = ball.isAwake ? 180 : 120;
+                let zone = { x: ball.x, y: ball.y, radius: zRadius, owner: ball, isAwakeZone: ball.isAwake };
+                zones.push(zone); setTimeout(() => { zones = zones.filter(z => z !== zone); }, 4000);
             }
         }
 
         function gameLoop() {
             if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (window.b1 && b1.hp <= 1000 && !isAwake1) { isAwake1 = true; b1.statusElement.innerText = "🔥 殘血覺醒！"; triggerAwakeInstant(b1, b2); }
-            if (window.b2 && b2.hp <= 1000 && !isAwake2) { isAwake2 = true; b2.statusElement.innerText = "🔥 殘血覺醒！"; triggerAwakeInstant(b2, b1); }
-            b1.isInShrine = false; b2.isInShrine = false;
+            ctx.fillStyle = centerBox.color; ctx.fillRect(centerBox.x, centerBox.y, centerBox.width, centerBox.height);
+            ctx.fillStyle = "#000"; ctx.font = "bold 14px sans-serif"; ctx.fillText("⚔️", centerBox.x + 30, centerBox.y + 45);
+
+            b1.speedDebuff = 1.0; b2.speedDebuff = 1.0; b1.isInShrine = false; b2.isInShrine = false;
             zones.forEach(z => {
-                ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.fillStyle = "rgba(255, 121, 121, 0.15)"; ctx.fill(); ctx.strokeStyle = "rgba(255, 159, 243, 0.6)"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
-                ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.font = "12px sans-serif"; ctx.fillText("🌸", z.x - 6, z.y + 5);
-                let zdx = z.owner.x - z.x, zdy = z.owner.y - z.y, zdist = Math.sqrt(zdx*zdx + zdy*zdy); if (zdist < z.radius) { z.owner.isInShrine = true; z.owner.heal(4); if (Math.random() < 0.1) playSound(1000, 'sine', 0.02, 0.02); }
+                ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
+                if (z.isAwakeZone) {
+                    let grad = ctx.createRadialGradient(z.x, z.y, z.radius * 0.2, z.x, z.y, z.radius);
+                    grad.addColorStop(0, z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.3)" : "rgba(46, 213, 115, 0.3)");
+                    grad.addColorStop(0.7, "rgba(241, 196, 15, 0.2)"); grad.addColorStop(1, "rgba(241, 196, 15, 0)"); ctx.fillStyle = grad; ctx.fill();
+                    ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 2; ctx.stroke();
+                } else {
+                    ctx.fillStyle = z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.12)" : "rgba(46, 213, 115, 0.12)"; ctx.fill();
+                }
+                ctx.closePath();
+                let dist1 = Math.sqrt((z.x - b1.x)**2 + (z.y - b1.y)**2), dist2 = Math.sqrt((z.x - b2.x)**2 + (z.y - b2.y)**2);
+                if (z.owner === b1 && dist1 < z.radius) { b1.isInShrine = true; b1.hp = Math.min(2000, b1.hp + (z.isAwakeZone ? 4 : 1.5)); }
+                if (z.owner === b2 && dist2 < z.radius) { b2.isInShrine = true; b2.hp = Math.min(2000, b2.hp + (z.isAwakeZone ? 4 : 1.5)); }
+                if (z.owner === b2 && dist1 < z.radius && z.isAwakeZone) { b1.speedDebuff = 0.5; }
+                if (z.owner === b1 && dist2 < z.radius && z.isAwakeZone) { b2.speedDebuff = 0.5; }
             });
-            if (isAwake1 && b1.skillType === 'shrine') drawLunarGod(b1, b2);
-            if (isAwake2 && b2.skillType === 'shrine') drawLunarGod(b2, b1);
-            obstacles.forEach(r => { ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.width, r.height); checkBallRectCollision(b1, r); checkBallRectCollision(b2, r); });
+
+            ctx.fillStyle = "#7f8c8d"; obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.width, obs.height));
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                let exp = explosions[i]; ctx.beginPath(); ctx.arc(exp.x, exp.y, exp.radius * (1 - exp.timer/15), 0, Math.PI*2);
+                ctx.fillStyle = "rgba(230, 126, 34, 0.4)"; ctx.fill(); ctx.closePath(); exp.timer--; if(exp.timer <= 0) explosions.splice(i, 1);
+            }
+
+            b1.move(); b2.move(); checkBallCollision(); b1.draw(); b2.draw(); lunars.forEach(l => { l.update(); l.draw(); });
+
             for (let i = crows.length - 1; i >= 0; i--) {
                 let c = crows[i]; c.move(); c.draw();
+                if (Math.sqrt((c.target.x - c.x)**2 + (c.target.y - c.y)**2) < c.target.radius + c.radius) {
+                    if (!c.target.isInvincible) c.target.hp -= c.isBreaker ? 280 : 120; playSound(200, 'sine', 0.1, 0.1); crows.splice(i, 1); continue;
+                }
                 if (c.isBreaker) {
-                    for (let j = obstacles.length - 1; j >= 1; j--) {
-                        let r = obstacles[j];
-                        if (c.x > r.x && c.x < r.x + r.width && c.y > r.y && c.y < r.y + r.height) { obstacles.splice(j, 1); playSound(200, 'triangle', 0.05, 0.04); }
+                    for(let oIdx = obstacles.length - 1; oIdx >= 0; oIdx--) {
+                        let obs = obstacles[oIdx]; if (c.x > obs.x && c.x < obs.x + obs.width && c.y > obs.y && c.y < obs.y + obs.height) { obstacles.splice(oIdx, 1); playSound(600, 'square', 0.05, 0.05); }
                     }
                 }
-                let tdx = c.target.x - c.x, tdy = c.target.y - c.y, td = Math.sqrt(tdx*tdx + tdy*tdy);
-                if (td < c.target.radius + c.radius) { c.target.takeDamage(220); crows.splice(i, 1); playSound(150, 'sawtooth', 0.25, 0.12); }
             }
-            b1.move(); b2.move(); checkBallCollision(b1, b2); b1.draw(); b2.draw(); requestAnimationFrame(gameLoop);
+
+            if (b1.hp < 0) b1.hp = 0; if (b2.hp < 0) b2.hp = 0;
+            hp1Display.innerText = Math.floor(b1.hp); hp2Display.innerText = Math.floor(b2.hp);
+
+            if (b1.hp <= 0 || b2.hp <= 0) {
+                gameActive = false; clearInterval(bgmInterval); gameOverScreen.style.display = "block";
+                if (b1.hp <= 0 && b2.hp <= 0) winnerText.innerText = "🤝 雙敗同歸於盡！ 🤝";
+                else winnerText.innerText = b1.hp <= 0 ? "🎉 綠球 玩家 2 獲勝！ 🎉" : "🎉 紅球 玩家 1 獲勝！ 🎉";
+                return;
+            }
+            requestAnimationFrame(gameLoop);
         }
-        function endGame(m) { gameActive = false; clearInterval(bgmInterval); if(lunarTimer1) clearInterval(lunarTimer1); if(lunarTimer2) clearInterval(lunarTimer2); timers.forEach(t => { clearInterval(t); clearTimeout(t); }); winnerText.innerText = m; gameOverScreen.style.display = "block"; playSound(100, 'sawtooth', 0.6, 0.2); }
-        function backToSelection() { gameOverScreen.style.display = "none"; gameScreen.style.display = "none"; selectionScreen.style.display = "flex"; }
-    </script>
-</body>
-</html>
+
+        function startGame() {
+            initAudio(); selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none";
+obstacles = []; crows = []; zones = []; timers = []; lunars = []; explosions = []; gameActive = true; st1Display.innerText = ""; st2Display.innerText = "";
+b1 = new Ball(100, 200, "#ff4757", "紅球", hp1Display, st1Display, document.getElementById("p1Select").value);
+b2 = new Ball(500, 200, "#2ed573", "綠球", hp2Display, st2Display, document.getElementById("p2Select").value);
+startSkillLoop(b1, b2); startSkillLoop(b2, b1); startBGM(); requestAnimationFrame(gameLoop);
+}
+function backToSelection() { timers.forEach(t => clearInterval(t)); clearInterval(bgmInterval); gameActive = false; gameOverScreen.style.display = "none"; gameScreen.style.display = "none"; selectionScreen.style.display = "flex"; }
