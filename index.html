@@ -2,318 +2,318 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙球生存對決-終極覺醒版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>殘血反殺！全自動物理亂彈生死鬥</title>
     <style>
-        * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
-        body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        #selectionScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; background: #111; z-index: 10; position: absolute; padding: 20px; }
-        .player-menu-box { width: 100%; max-width: 300px; background: #222; border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center; }
-        .p1-box { border: 2px solid #ff4757; } .p2-box { border: 2px solid #2ed573; }
-        select { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; margin-top: 5px; }
-        #startBtn { margin-top: 20px; width: 100%; max-width: 200px; padding: 14px; font-size: 18px; font-weight: bold; background: #f1c40f; border: none; border-radius: 25px; color: #000; cursor: pointer; }
-        #gameScreen { display: none; flex-direction: column; align-items: center; width: 100vw; }
-        #scoreboard { display: flex; justify-content: space-around; width: 100%; max-width: 500px; font-size: 14px; font-weight: bold; margin-bottom: 5px; text-align: center; }
-        canvas { border: 2px solid #fff; background: #050505; max-width: 95vw; max-height: 65vh; }
-        #gameOverScreen { display: none; position: absolute; background: rgba(0,0,0,0.95); width: 80%; max-width: 280px; padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #fff; z-index: 20; }
+        body {
+            background-color: #121214;
+            color: #ffffff;
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+        }
+        h1 {
+            color: #00ffcc;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+            margin-bottom: 10px;
+        }
+        .setup-panel {
+            background: #1e1e24;
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+            transition: opacity 0.3s ease;
+        }
+        .player-select {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .player-select.p1 label { color: #ff4a4a; font-weight: bold; }
+        .player-select.p2 label { color: #4a90e2; font-weight: bold; }
+        select {
+            background: #2a2a32;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            outline: none;
+        }
+        select:focus { border-color: #00ffcc; }
+        #startBtn {
+            background: linear-gradient(135deg, #00ffcc, #00bfff);
+            color: #121214;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+            margin-top: 18px;
+        }
+        #startBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(0, 255, 204, 0.7);
+        }
+        #canvasContainer {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background: #0d0d11;
+        }
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            font-size: 18px;
+            transition: opacity 0.3s ease;
+        }
+        .hp-bar-container {
+            width: 45%;
+            background: #333;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #555;
+        }
+        .hp-bar {
+            height: 100%;
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+        #p1HpBar { background: linear-gradient(90deg, #ff4a4a, #ff8585); box-shadow: 0 0 10px rgba(255,74,74,0.5); }
+        #p2HpBar { background: linear-gradient(90deg, #4a90e2, #85b7ff); box-shadow: 0 0 10px rgba(74,144,226,0.5); }
+        #announcement {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px black;
+            pointer-events: none;
+            text-align: center;
+            width: 100%;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
-    <div id="selectionScreen">
-        <h3 style="color:#f1c40f; margin:0 0 10px 0;">⚔️ 請選取雙方技能 ⚔️</h3>
-        <div class="player-menu-box p1-box">
-            <h4 style="color:#ff4757; margin:0 0 8px 0;">🔴 玩家 1 (紅球)</h4>
+
+    <h1>《殘血反殺！全自動物理亂彈生死鬥》</h1>
+
+    <div id="setupPanel" class="setup-panel">
+        <div class="player-select p1">
+            <label>玩家 1 (紅方)</label>
             <select id="p1Select">
-                <option value="shield">🛡️ 護盾 (蓄能反彈傷)</option>
-                <option value="giant">💪 巨大 (2倍超巨大暴走)</option>
-                <option value="crow">🦅 烏鴉 (穿牆咬碎方塊)</option>
-                <option value="block">🧱 障礙 (全場方塊引爆傷)</option>
-                <option value="shrine" selected>🌸 祈禱 (月神降臨全場轟炸)</option>
+                <option value="ninja">🥷 忍者</option>
+                <option value="giant">🧱 巨大</option>
+                <option value="maiden">⛩️ 巫女</option>
+                <option value="blocker">🚧 障礙物</option>
+                <option value="crow">🪶 烏鴉</option>
+                <option value="invincible">🛡️ 無敵</option>
             </select>
         </div>
-        <div class="player-menu-box p2-box">
-            <h4 style="color:#2ed573; margin:0 0 8px 0;">🟢 玩家 2 (綠球)</h4>
+        <button id="startBtn">START BATTLE</button>
+        <div class="player-select p2">
+            <label>玩家 2 (藍方)</label>
             <select id="p2Select">
-                <option value="shield">🛡️ 護盾 (蓄能反彈傷)</option>
-                <option value="giant">💪 巨大 (2倍超巨大暴走)</option>
-                <option value="crow" selected>🦅 烏鴉 (穿牆咬碎方塊)</option>
-                <option value="block">🧱 障礙 (全場方塊引爆傷)</option>
-                <option value="shrine">🌸 祈禱 (月神降臨全場轟炸)</option>
+                <option value="giant">🧱 巨大</option>
+                <option value="ninja">🥷 忍者</option>
+                <option value="maiden">⛩️ 巫女</option>
+                <option value="blocker">🚧 障礙物</option>
+                <option value="crow">🪶 烏鴉</option>
+                <option value="invincible">🛡️ 無敵</option>
             </select>
         </div>
-        <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥 ⚔️</button>
     </div>
-    <div id="gameScreen">
-        <div id="scoreboard">
-            <div style="color:#ff4757">紅球: <span id="hp1">2000</span> HP<div id="st1" style="font-size:10px;color:#aaa"></div></div>
-            <div style="color:#2ed573">綠球: <span id="hp2">2000</span> HP<div id="st2" style="font-size:10px;color:#aaa"></div></div>
-        </div>
-        <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <div id="hudText" class="hud" style="opacity: 0; pointer-events: none;">
+        <div style="color:#ff4a4a;">P1 HP: <span id="p1HpText">5000</span></div>
+        <div style="color:#4a90e2;">P2 HP: <span id="p2HpText">5000</span></div>
     </div>
-    <div id="gameOverScreen">
-        <h3 id="winnerText" style="color:#f1c40f;margin:0 0 15px 0;"></h3>
-        <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff; color:#000; cursor:pointer;">返回選擇</button>
+    
+    <div id="hudBars" class="hud" style="margin-top:-10px; margin-bottom:15px; opacity: 0; pointer-events: none;">
+        <div class="hp-bar-container"><div id="p1HpBar" class="hp-bar"></div></div>
+        <div class="hp-bar-container"><div id="p2HpBar" class="hp-bar"></div></div>
+    </div>
+
+    <div id="canvasContainer">
+        <div id="announcement"></div>
+        <canvas id="gameCanvas" width="800" height="550"></canvas>
     </div>
     <script>
-        const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
-        const selectionScreen = document.getElementById("selectionScreen"), gameScreen = document.getElementById("gameScreen"), gameOverScreen = document.getElementById("gameOverScreen"), winnerText = document.getElementById("winnerText");
-        const hp1Display = document.getElementById("hp1"), hp2Display = document.getElementById("hp2"), st1Display = document.getElementById("st1"), st2Display = document.getElementById("st2");
-        
-        let gameActive = false, obstacles = [], crows = [], zones = [], timers = [], lunars = [], explosions = [];
-        let b1, b2;
-        const centerBox = { x: 260, y: 160, width: 80, height: 80, color: "#f1c40f" };
-        let audioCtx = null, bgmInterval = null;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const p1Select = document.getElementById('p1Select');
+const p2Select = document.getElementById('p2Select');
+const announcement = document.getElementById('announcement');
+const setupPanel = document.getElementById('setupPanel');
+const hudText = document.getElementById('hudText');
+const hudBars = document.getElementById('hudBars');
 
-        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-        function playSound(freq, type, duration, vol) {
-            if (!audioCtx) return; try {
-                let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-                osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gain.gain.setValueAtTime(vol, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
-            } catch(e){}
-        }
-        function startBGM() {
-            if(bgmInterval) clearInterval(bgmInterval);
-            let notes = [261.63, 293.66, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66], step = 0;
-            bgmInterval = setInterval(() => {
-                if (!gameActive) return;
-                playSound(notes[step % notes.length], 'square', 0.15, 0.02);
-                if(step % 4 === 0) playSound(80, 'triangle', 0.12, 0.08);
-                step++;
-            }, 220);
-        }
-        class Crow {
-            constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 5; this.isBreaker = false; }
-            move() { 
-                let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy); 
-                if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; } 
-            }
-            draw() {
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-                ctx.fillStyle = this.isBreaker ? "#f1c40f" : (this.color === "#ff4757" ? "#ff7675" : "#55efc4"); ctx.fill(); ctx.closePath();
-                ctx.fillStyle = "#fff"; ctx.font = this.isBreaker ? "12px sans-serif" : "10px sans-serif"; ctx.fillText(this.isBreaker ? "👑" : "🦅", this.x - 6, this.y + 4);
-            }
-        }
+let gameActive = false, p1, p2, projectiles = [], obstacles = [], particles = [], zones = [], screenShake = 0, hitStopFrames = 0;
+const BASE_HP = 5000, BASE_RADIUS = 25, BASE_SPEED = 6, BASE_DAMAGE = 25; 
 
-        class LunarBullet {
-            constructor(x, y, t) { this.x = x; this.y = y; this.target = t; this.radius = 4; this.speed = 4.5; }
-            move() {
-                let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy);
-                if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; }
-            }
-            draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = "#f1c40f"; ctx.fill(); ctx.closePath(); }
+class Ball {
+    constructor(id, x, y, color, type) {
+        this.id = id; this.x = x; this.y = y; this.baseRadius = BASE_RADIUS; this.radius = BASE_RADIUS;
+        this.color = color; this.type = type; this.hp = BASE_HP; this.mass = 1; this.baseSpeed = BASE_SPEED;
+        let angle = (id === 1) ? (Math.random() * 0.8 - 0.4) : (Math.random() * 0.8 + Math.PI - 0.4);
+        this.vx = Math.cos(angle) * this.baseSpeed; this.vy = Math.sin(angle) * this.baseSpeed;
+        this.isAwakened = false; this.skillTimer = 0; this.bounceCount = 0; this.isInvincible = false; this.invincibleTimer = 0; this.isClone = false;
+    }
+    update() {
+        if (this.hp <= 1000 && !this.isAwakened) {
+            this.isAwakened = true;
+            triggerAnnouncement(`${this.id === 1 ? '紅方' : '藍方'} 殘血覺醒！`, this.color);
+            if (this.type === 'blocker') explodeAllObstacles(this);
+            if (this.type === 'ninja' && !this.isClone) spawnNinjaClone(this);
         }
-
-        class LunarHealBullet {
-            constructor(x, y, t) { this.x = x; this.y = y; this.target = t; this.radius = 4; this.speed = 4.0; }
-            move() {
-                let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy);
-                if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; }
+        if (this.isInvincible) { this.invincibleTimer--; if (this.invincibleTimer <= 0) this.isInvincible = false; }
+        this.skillTimer++; this.executeTalent(); this.x += this.vx; this.y += this.vy;
+        if (this.x - this.radius < 0) { this.x = this.radius; this.vx *= -1; this.onWallBounce(); }
+        else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx *= -1; this.onWallBounce(); }
+        if (this.y - this.radius < 0) { this.y = this.radius; this.vy *= -1; this.onWallBounce(); }
+        else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy *= -1; this.onWallBounce(); }
+    }
+    onWallBounce() {
+        this.bounceCount++;
+        if (this.type === 'giant') {
+            let maxGrow = this.isAwakened ? 2.5 : 1.6;
+            if (this.radius < this.baseRadius * maxGrow) {
+                this.radius += 0.5; this.mass += 0.05;
+                let curSpd = Math.hypot(this.vx, this.vy), newSpd = Math.min(curSpd + 0.15, 14);
+                this.vx = (this.vx / curSpd) * newSpd; this.vy = (this.vy / curSpd) * newSpd;
             }
-            draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = "#2ed573"; ctx.fill(); ctx.closePath(); }
+            if (this.isAwakened) screenShake = 8; 
         }
-
-        class LunarGod {
-            constructor(x, y, owner, target) { this.x = x; this.y = y; this.owner = owner; this.target = target; this.bullets = []; this.healBullets = []; this.shootCd = 0; }
-            update() {
-                this.shootCd++;
-                if (this.shootCd >= 25) { 
-                    this.bullets.push(new LunarBullet(this.x, this.y, this.target));
-                    this.healBullets.push(new LunarHealBullet(this.x, this.y, this.owner));
-                    this.shootCd = 0; playSound(587, 'sine', 0.05, 0.03);
-                }
-                for (let i = this.bullets.length - 1; i >= 0; i--) {
-                    let b = this.bullets[i]; b.move(); b.draw();
-                    let dx = b.target.x - b.x, dy = b.target.y - b.y;
-                    if (Math.sqrt(dx*dx + dy*dy) < b.target.radius + b.radius) {
-                        if (!b.target.isInvincible) b.target.hp -= 25; 
-                        this.bullets.splice(i, 1); playSound(220, 'sine', 0.05, 0.05);
-                    }
-                }
-                for (let i = this.healBullets.length - 1; i >= 0; i--) {
-                    let hb = this.healBullets[i]; hb.move(); hb.draw();
-                    let dx = hb.target.x - hb.x, dy = hb.target.y - hb.y;
-                    if (Math.sqrt(dx*dx + dy*dy) < hb.target.radius + hb.radius) {
-                        hb.target.hp = Math.min(2000, hb.target.hp + 40); 
-                        this.healBullets.splice(i, 1); playSound(440, 'sine', 0.04, 0.02);
-                    }
-                }
-            }
-            draw() {
-                ctx.fillStyle = "#fff"; ctx.font = "24px sans-serif"; ctx.fillText("🌙", this.x - 12, this.y + 8);
-                ctx.beginPath(); ctx.arc(this.x, this.y, 25, 0, Math.PI*2); ctx.strokeStyle = "rgba(241, 196, 15, 0.5)"; ctx.lineWidth = 1.5; ctx.stroke(); ctx.closePath();
-            }
-        }
-        function triggerUltimateSkill(ball, opponent) {
-            ball.baseRadius = 22; ball.radius = ball.isGiant ? ball.radius : 22;
-            if (ball.skillType === 'shield') {
-                ball.isInvincible = true; ball.reflectActive = true; ball.statusElement.innerText = "🚨 覺醒：全傷害反彈！";
-                setTimeout(() => { ball.isInvincible = false; ball.reflectActive = false; }, 6000);
-            } else if (ball.skillType === 'giant') {
-                ball.isGiant = true; ball.radius = ball.baseRadius * 4; ball.vx *= 2.0; ball.vy *= 2.0; ball.statusElement.innerText = "👑 覺醒：兩倍泰坦暴走！";
-                setTimeout(() => {
-                    ball.isGiant = false; ball.radius = ball.baseRadius;
-                    ball.vx = ball.vx > 0 ? ball.baseSpeedX * 1.3 : -ball.baseSpeedX * 1.3; ball.vy = ball.vy > 0 ? ball.baseSpeedY * 1.3 : -ball.baseSpeedY * 1.3;
-                }, 10000);
-            } else if (ball.skillType === 'crow') {
-                ball.statusElement.innerText = "🦅 覺醒：破滅召喚！";
-                let cr = new Crow(ball.x, ball.y, opponent, ball.color); cr.isBreaker = true; cr.speed = 7; cr.radius = 12; crows.push(cr);
-            } else if (ball.skillType === 'block') {
-                ball.statusElement.innerText = "🧱 覺醒：全場方塊引爆！";
-                let myObs = obstacles.filter(o => o.owner === ball);
-                myObs.forEach(obs => {
-                    explosions.push({ x: obs.x + obs.width/2, y: obs.y + obs.height/2, radius: 90, timer: 15 });
-                    let dx = opponent.x - (obs.x + obs.width/2), dy = opponent.y - (obs.y + obs.height/2);
-                    if (Math.sqrt(dx*dx + dy*dy) < 90 + opponent.radius && !opponent.isInvincible) opponent.hp -= 350;
-                });
-                obstacles = obstacles.filter(o => o.owner !== ball); playSound(100, 'sawtooth', 0.4, 0.3);
-            } else if (ball.skillType === 'shrine') {
-                ball.statusElement.innerText = "🌙 覺醒：月神臨世(自帶回血)！"; lunars.push(new LunarGod(ball.x, ball.y, ball, opponent));
-            }
-        }
-
-        class Ball {
-            constructor(x, y, c, n, h, st, skill) {
-                this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c;
-                this.vx = c === "#ff4757" ? 10.5 : -10.5; this.vy = 7;
-                this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy);
-                this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.skillType = skill;
-                this.isInvincible = false; this.isInShrine = false; this.isGiant = false; this.isAwake = false; this.speedDebuff = 1.0; this.reflectActive = false; 
-            }
-            draw() {
-                if (this.isAwake) {
-                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 12, 0, Math.PI*2); ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 4; ctx.stroke(); ctx.closePath();
-                }
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
-                if (this.isInvincible) { 
-                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = this.reflectActive ? "#f1c40f" : "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); 
-                }
-            }
-            move() {
-                if (this.hp <= 1000 && !this.isAwake) {
-                    this.isAwake = true; playSound(987, 'sawtooth', 0.5, 0.25); triggerUltimateSkill(this, this === b1 ? b2 : b1);
-                }
-                let currentSpeedMultiplier = (this.isInShrine ? 1.5 : 1.0) * this.speedDebuff;
-                this.x += this.vx * currentSpeedMultiplier; this.y += this.vy * currentSpeedMultiplier;
-                
-                if (this.x - this.radius < 0) { this.x = this.radius; this.vx = Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); } 
-                else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); }
-                if (this.y - this.radius < 0) { this.y = this.radius; this.vy = Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
-                else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
-
-                if (this.x + this.radius > centerBox.x && this.x - this.radius < centerBox.x + centerBox.width && this.y + this.radius > centerBox.y && this.y - this.radius < centerBox.y + centerBox.height) {
-                    let overlapX = Math.min(this.x + this.radius - centerBox.x, centerBox.x + centerBox.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - centerBox.y, centerBox.y + centerBox.height - (this.y - this.radius));
-                    if (overlapX < overlapY) { this.vx = this.x < centerBox.x + centerBox.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < centerBox.y + centerBox.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
-                    playSound(440, 'triangle', 0.05, 0.05);
-                }
-                obstacles.forEach((obs) => {
-                    if (this.x + this.radius > obs.x && this.x - this.radius < obs.x + obs.width && this.y + this.radius > obs.y && this.y - this.radius < obs.y + obs.height) {
-                        let overlapX = Math.min(this.x + this.radius - obs.x, obs.x + obs.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - obs.y, obs.y + obs.height - (this.y - this.radius));
-                        if (overlapX < overlapY) { this.vx = this.x < obs.x + obs.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < obs.y + obs.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
-                        playSound(290, 'triangle', 0.04, 0.04);
-                    }
-                });
-            }
-        }
-
-        function checkBallCollision() {
-            let dx = b2.x - b1.x, dy = b2.y - b1.y, dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < b1.radius + b2.radius) {
-                let normalX = dx / dist, normalY = dy / dist, kx = b1.vx - b2.vx, ky = b1.vy - b2.vy;
-                let p = 2 * (normalX * kx + normalY * ky) / 2; b1.vx -= p * normalX; b1.vy -= p * normalY; b2.vx += p * normalX; b2.vy += p * normalY;
-                let d1 = b2.isGiant ? 160 : 80, d2 = b1.isGiant ? 160 : 80;
-                if (b2.isAwake) d1 *= 1.3; if (b1.isAwake) d2 *= 1.3;
-                if (b1.isInvincible) { if (b1.reflectActive && !b2.isInvincible) b2.hp -= Math.floor(d1); d1 = 0; }
-                if (b2.isInvincible) { if (b2.reflectActive && !b1.isInvincible) b1.hp -= Math.floor(d2); d2 = 0; }
-                b1.hp -= Math.floor(d1); b2.hp -= Math.floor(d2); playSound(150, 'sawtooth', 0.15, 0.15);
-            }
-        }
-
-        function startSkillLoop(ball, opponent) {
-            let cd = ball.skillType === 'crow' ? 10000 : 5000;
-            let timer = setInterval(() => { if (gameActive) executeSkill(ball, opponent); }, cd);
-            timers.push(timer);
-        }
-
-        function executeSkill(ball, opponent) {
-            if(ball.statusElement.innerText === "") ball.statusElement.innerText = "技能發動!";
-            setTimeout(() => { if(!ball.isAwake) ball.statusElement.innerText = ""; }, 1500);
-            if (ball.skillType === 'shield') {
-                ball.isInvincible = true; setTimeout(() => ball.isInvincible = false, 5000);
-            } else if (ball.skillType === 'giant') {
-                ball.isGiant = true; ball.radius = ball.baseRadius * 2; ball.vx *= 1.4; ball.vy *= 1.4;
-                setTimeout(() => {
-                    ball.isGiant = false; ball.radius = ball.baseRadius;
-                    ball.vx = ball.vx > 0 ? ball.baseSpeedX : -ball.baseSpeedX; ball.vy = ball.vy > 0 ? ball.baseSpeedY : -ball.baseSpeedY;
-                }, 10000);
-            } else if (ball.skillType === 'crow') {
-                crows.push(new Crow(ball.x, ball.y, opponent, ball.color));
-            } else if (ball.skillType === 'block') {
-                obstacles.push({ x: ball.x - 20, y: ball.y - 20, width: 40, height: 40, owner: ball });
-                if (obstacles.length > 5) obstacles.shift();
-            } else if (ball.skillType === 'shrine') {
-                let zRadius = ball.isAwake ? 180 : 120;
-                let zone = { x: ball.x, y: ball.y, radius: zRadius, owner: ball, isAwakeZone: ball.isAwake };
-                zones.push(zone); setTimeout(() => { zones = zones.filter(z => z !== zone); }, 4000);
-            }
-        }
-
-        function gameLoop() {
-            if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = centerBox.color; ctx.fillRect(centerBox.x, centerBox.y, centerBox.width, centerBox.height);
-            ctx.fillStyle = "#000"; ctx.font = "bold 14px sans-serif"; ctx.fillText("⚔️", centerBox.x + 30, centerBox.y + 45);
-
-            b1.speedDebuff = 1.0; b2.speedDebuff = 1.0; b1.isInShrine = false; b2.isInShrine = false;
-            zones.forEach(z => {
-                ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
-                if (z.isAwakeZone) {
-                    let grad = ctx.createRadialGradient(z.x, z.y, z.radius * 0.2, z.x, z.y, z.radius);
-                    grad.addColorStop(0, z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.3)" : "rgba(46, 213, 115, 0.3)");
-                    grad.addColorStop(0.7, "rgba(241, 196, 15, 0.2)"); grad.addColorStop(1, "rgba(241, 196, 15, 0)"); ctx.fillStyle = grad; ctx.fill();
-                    ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 2; ctx.stroke();
+    }
+    executeTalent() {
+        if (this.type === 'crow' && this.skillTimer % 100 === 0) {
+            let target = getEnemy(this);
+            if (target) {
+                if (!this.isAwakened) {
+                    projectiles.push({ type: 'crow', x: this.x, y: this.y, vx: 0, vy: 0, radius: 8, color: '#9b59b6', owner: this, damage: 150, isTracking: true });
                 } else {
-                    ctx.fillStyle = z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.12)" : "rgba(46, 213, 115, 0.12)"; ctx.fill();
+                    let angle = Math.atan2(this.vy, this.vx);
+                    projectiles.push({ type: 'giant_crow', x: this.x, y: this.y, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10, radius: 30, color: '#4a148c', owner: this, damage: 450, isTracking: false });
                 }
-ctx.closePath();
-let dist1 = Math.sqrt((z.x - b1.x)2 + (z.y - b1.y)2), dist2 = Math.sqrt((z.x - b2.x)2 + (z.y - b2.y)2);
-if (z.owner === b1 && dist1 < z.radius) { b1.isInShrine = true; b1.hp = Math.min(2000, b1.hp + (z.isAwakeZone ? 4 : 1.5)); }
-if (z.owner === b2 && dist2 < z.radius) { b2.isInShrine = true; b2.hp = Math.min(2000, b2.hp + (z.isAwakeZone ? 4 : 1.5)); }
-if (z.owner === b2 && dist1 < z.radius && z.isAwakeZone) { b1.speedDebuff = 0.5; }
-if (z.owner === b1 && dist2 < z.radius && z.isAwakeZone) { b2.speedDebuff = 0.5; }
-});
-ctx.fillStyle = "#7f8c8d"; obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.width, obs.height));
-for (let i = explosions.length - 1; i >= 0; i--) {
-let exp = explosions[i]; ctx.beginPath(); ctx.arc(exp.x, exp.y, exp.radius * (1 - exp.timer/15), 0, Math.PI*2);
-ctx.fillStyle = "rgba(230, 126, 34, 0.4)"; ctx.fill(); ctx.closePath(); exp.timer--; if(exp.timer <= 0) explosions.splice(i, 1);
+            }
+        }
+        if (this.type === 'ninja' && this.skillTimer % 120 === 0) {
+            let target = getEnemy(this);
+            if (target) {
+                let angle = Math.atan2(target.y - this.y, target.x - this.x);
+                for(let i=0; i<3; i++) {
+                    let dev = (i - 1) * 0.2; 
+                    projectiles.push({ type: 'kunai', x: this.x, y: this.y, vx: Math.cos(angle + dev) * 9, vy: Math.sin(angle + dev) * 9, radius: 5, color: '#e74c3c', owner: this, damage: 100 });
+                }
+            }
+        }
+        if (this.type === 'blocker' && this.skillTimer % 150 === 0 && !this.isAwakened) {
+            obstacles.push({ x: this.x - this.vx * 3, y: this.y - this.vy * 3, size: 30, owner: this });
+            if (obstacles.length > 5) obstacles.shift(); 
+        }
+        if (this.type === 'invincible' && this.skillTimer % 240 === 0) { this.isInvincible = true; this.invincibleTimer = 120; }
+        if (this.type === 'maiden' && this.skillTimer % 200 === 0) {
+            zones.push({ type: this.isAwakened ? 'lunar' : 'shrine', x: Math.random() * (canvas.width - 200) + 100, y: Math.random() * (canvas.height - 200) + 100, radius: this.isAwakened ? 120 : 70, owner: this, duration: 240 });
+            if (zones.length > 2) zones.shift();
+        }
+    }
+    takeDamage(amount, attacker) {
+        if (this.isInvincible) {
+            if (this.isAwakened && attacker && attacker !== this) { attacker.takeDamage(amount, this); createParticles(this.x, this.y, '#f1c40f', 10); }
+            return;
+        }
+        this.hp = Math.max(0, this.hp - amount); createParticles(this.x, this.y, this.color, 8); hitStopFrames = 2; 
+    }
+    draw() {
+        ctx.save(); if (this.isAwakened) { ctx.shadowBlur = 20; ctx.shadowColor = this.color; }
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
+        if (this.isInvincible) {
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2); ctx.strokeStyle = this.isAwakened ? '#e67e22' : '#f1c40f'; ctx.lineWidth = this.isAwakened ? 5 : 3; ctx.stroke(); ctx.closePath();
+        }
+        ctx.restore();
+    }
 }
-b1.move(); b2.move(); checkBallCollision(); b1.draw(); b2.draw(); lunars.forEach(l => { l.update(); l.draw(); });
-for (let i = crows.length - 1; i >= 0; i--) {
-let c = crows[i]; c.move(); c.draw();
-if (Math.sqrt((c.target.x - c.x)2 + (c.target.y - c.y)2) < c.target.radius + c.radius) {
-if (!c.target.isInvincible) c.target.hp -= c.isBreaker ? 280 : 120; playSound(200, 'sine', 0.1, 0.1); crows.splice(i, 1); continue;
+
+function getEnemy(self) { return self.id === 1 ? p2 : p1; }
+function triggerAnnouncement(text, color) { announcement.innerText = text; announcement.style.color = color; setTimeout(() => { if (announcement.innerText === text) announcement.innerText = ''; }, 2000); }
+function createParticles(x, y, color, count) { for (let i = 0; i < count; i++) { particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, radius: Math.random() * 3 + 1, color: color, alpha: 1 }); } }
+
+function explodeAllObstacles(owner) {
+    let enemy = getEnemy(owner);
+    obstacles.forEach(obs => {
+        createParticles(obs.x + obs.size/2, obs.y + obs.size/2, '#e67e22', 15);
+        let dist = Math.hypot(enemy.x - (obs.x + obs.size/2), enemy.y - (obs.y + obs.size/2));
+        if (dist < 150) { enemy.takeDamage(400, owner); enemy.vx += Math.cos(Math.atan2(enemy.y - (obs.y + obs.size/2), enemy.x - (obs.x + obs.size/2))) * 12; enemy.vy += Math.sin(Math.atan2(enemy.y - (obs.y + obs.size/2), enemy.x - (obs.x + obs.size/2))) * 12; }
+    });
+    obstacles = []; screenShake = 12;
 }
-if (c.isBreaker) {
-for(let oIdx = obstacles.length - 1; oIdx >= 0; oIdx--) {
-let obs = obstacles[oIdx]; if (c.x > obs.x && c.x < obs.x + obs.width && c.y > obs.y && c.y < obs.y + obs.height) { obstacles.splice(oIdx, 1); playSound(600, 'square', 0.05, 0.05); }
+
+function spawnNinjaClone(parent) {
+    let clone = new Ball(parent.id, parent.x, parent.y, '#555555', 'ninja'); clone.isClone = true; clone.hp = parent.hp; clone.vx = -parent.vx * 1.2; clone.vy = -parent.vy * 1.2; window.ninjaClone = clone;
+    setTimeout(() => { window.ninjaClone = null; }, 10000);
 }
+
+function handleBallCollision(b1, b2) {
+    let dx = b2.x - b1.x, dy = b2.y - b1.y, distance = Math.hypot(dx, dy);
+    if (distance < b1.radius + b2.radius) {
+        let overlap = (b1.radius + b2.radius) - distance, nx = dx / distance, ny = dy / distance;
+        b1.x -= nx * overlap * 0.5; b1.y -= ny * overlap * 0.5; b2.x += nx * overlap * 0.5; b2.y += ny * overlap * 0.5;
+        let kx = b1.vx - b2.vx, ky = b1.vy - b2.vy, p = 2 * (nx * kx + ny * ky) / (b1.mass + b2.mass);
+        b1.vx -= p * b2.mass * nx; b1.vy -= p * b2.mass * ny; b2.vx += p * b1.mass * nx; b2.vy += p * b1.mass * ny;
+        let relSpd = Math.hypot(kx, ky); b1.takeDamage(Math.round(BASE_DAMAGE * b2.mass * (relSpd / BASE_SPEED)), b2); b2.takeDamage(Math.round(BASE_DAMAGE * b1.mass * (relSpd / BASE_SPEED)), b1); screenShake = Math.min(relSpd, 10);
+    }
 }
+
+function handleObstacleCollision(ball) {
+    obstacles.forEach(obs => {
+        let closestX = Math.max(obs.x, Math.min(ball.x, obs.x + obs.size)), closestY = Math.max(obs.y, Math.min(ball.y, obs.y + obs.size));
+        let distanceX = ball.x - closestX, distanceY = ball.y - closestY, distance = Math.hypot(distanceX, distanceY);
+        if (distance < ball.radius) {
+            if (Math.abs(distanceX) > Math.abs(distanceY)) { ball.vx *= -1; ball.x = distanceX > 0 ? closestX + ball.radius : closestX - ball.radius; }
+            else { ball.vy *= -1; ball.y = distanceY > 0 ? closestY + ball.radius : closestY - ball.radius; }
+            ball.onWallBounce();
+        }
+    });
 }
-if (b1.hp < 0) b1.hp = 0; if (b2.hp < 0) b2.hp = 0;
-hp1Display.innerText = Math.floor(b1.hp); hp2Display.innerText = Math.floor(b2.hp);
-if (b1.hp <= 0 || b2.hp <= 0) {
-gameActive = false; clearInterval(bgmInterval); gameOverScreen.style.display = "block";
-if (b1.hp <= 0 && b2.hp <= 0) winnerText.innerText = "🤝 雙敗同歸於盡！ 🤝";
-else winnerText.innerText = b1.hp <= 0 ? "🎉 綠球 玩家 2 獲勝！ 🎉" : "🎉 紅球 玩家 1 獲勝！ 🎉";
-return;
+
+function handleGameOver() {
+    gameActive = false; ctx.restore(); ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
+    if (p1.hp <= 0 && p2.hp <= 0) { ctx.fillStyle = '#ffffff'; ctx.fillText('平手！', canvas.width / 2, canvas.height / 2 - 20); }
+    else if (p1.hp <= 0) { ctx.fillStyle = '#4a90e2'; ctx.fillText('藍方 (PLAYER 2) 獲勝！', canvas.width / 2, canvas.height / 2 - 20); }
+    else { ctx.fillStyle = '#ff4a4a'; ctx.fillText('紅方 (PLAYER 1) 獲勝！', canvas.width / 2, canvas.height / 2 - 20); }
+    ctx.font = '20px sans-serif'; ctx.fillStyle = '#aaaaaa'; ctx.fillText('正在回到主選單...', canvas.width / 2, canvas.height / 2 + 40);
+    setTimeout(() => { ctx.clearRect(0, 0, canvas.width, canvas.height); hudText.style.opacity = '0'; hudBars.style.opacity = '0'; setupPanel.style.opacity = '1'; setupPanel.style.pointerEvents = 'auto'; }, 3000);
 }
-requestAnimationFrame(gameLoop);
-}
-function startGame() {
-initAudio(); selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none";
-obstacles = []; crows = []; zones = []; timers = []; lunars = []; explosions = []; gameActive = true; st1Display.innerText = ""; st2Display.innerText = "";
-b1 = new Ball(100, 200, "#ff4757", "紅球", hp1Display, st1Display, document.getElementById("p1Select").value);
-b2 = new Ball(500, 200, "#2ed573", "綠球", hp2Display, st2Display, document.getElementById("p2Select").value);
-startSkillLoop(b1, b2); startSkillLoop(b2, b1); startBGM(); requestAnimationFrame(gameLoop);
-}
-function backToSelection() { timers.forEach(t => clearInterval(t)); clearInterval(bgmInterval); gameActive = false; gameOverScreen.style.display = "none"; gameScreen.style.display = "none"; selectionScreen.style.display = "flex"; }
+
+function gameLoop() {
+    if (!gameActive) return; if (hitStopFrames > 0) { hitStopFrames--; requestAnimationFrame(gameLoop); return; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.save();
+if (screenShake > 0) { ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake); screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }zones.forEach((zone, index) => {zone.duration--; if (zone.duration <= 0) { zones.splice(index, 1); return; }ctx.beginPath(); ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2); ctx.fillStyle = zone.type === 'lunar' ? 'rgba(155, 89, 182, 0.15)' : 'rgba(46, 204, 113, 0.15)'; ctx.fill(); ctx.strokeStyle = zone.type === 'lunar' ? '#9b59b6' : '#2ecc71'; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();[p1, p2, window.ninjaClone].forEach(b => {if (!b) return;if (b.type === 'maiden' && b === zone.owner) {if (Math.hypot(b.x - zone.x, b.y - zone.y) < zone.radius + b.radius) b.hp = Math.min(BASE_HP, b.hp + (zone.type === 'lunar' ? 8 : 4));if (zone.type === 'lunar') { ctx.beginPath(); ctx.moveTo(zone.x, zone.y); ctx.lineTo(b.x, b.y); ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); }}if (zone.type === 'lunar' && b !== zone.owner && Math.hypot(b.x - zone.x, b.y - zone.y) < zone.radius) b.takeDamage(2, zone.owner);});});obstacles.forEach(obs => { ctx.fillStyle = '#7f8c8d'; ctx.fillRect(obs.x, obs.y, obs.size, obs.size); ctx.strokeStyle = '#bdc3c7'; ctx.strokeRect(obs.x, obs.y, obs.size, obs.size); });p1.update(); p2.update();if (window.ninjaClone) { window.ninjaClone.update(); window.ninjaClone.draw(); handleBallCollision(window.ninjaClone, p2); handleObstacleCollision(window.ninjaClone); }handleBallCollision(p1, p2); handleObstacleCollision(p1); handleObstacleCollision(p2);p1.draw(); p2.draw();projectiles.forEach((proj, index) => {let enemy = getEnemy(proj.owner); if (proj.isTracking) { let angle = Math.atan2(enemy.y - proj.y, enemy.x - proj.x); proj.vx = Math.cos(angle) * 4.5; proj.vy = Math.sin(angle) * 4.5; }proj.x += proj.vx; proj.y += proj.vy;ctx.beginPath(); ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2); ctx.fillStyle = proj.color; ctx.fill(); ctx.closePath();if (proj.type === 'kunai') {if (proj.x - proj.radius < 0 || proj.x + proj.radius > canvas.width) proj.vx *= -1; if (proj.y - proj.radius < 0 || proj.y + proj.radius > canvas.height) proj.vy *= -1;obstacles.forEach(obs => { if (proj.x > obs.x && proj.x < obs.x + obs.size && proj.y > obs.y && proj.y < obs.y + obs.size) proj.vy *= -1; });}if (proj.type === 'giant_crow') { obstacles.forEach((obs, oIdx) => { if (Math.hypot(proj.x - (obs.x + obs.size/2), proj.y - (obs.y + obs.size/2)) < proj.radius + obs.size/2) { createParticles(obs.x + obs.size/2, obs.y + obs.size/2, '#7f8c8d', 8); obstacles.splice(oIdx, 1); } }); }let targets = proj.owner.isClone ? [p1, p2].filter(b => b.id !== proj.owner.id) : [enemy];targets.forEach(t => { if (Math.hypot(proj.x - t.x, proj.y - t.y) < proj.radius + t.radius) { t.takeDamage(proj.damage, proj.owner); projectiles.splice(index, 1); } });if (proj.type !== 'kunai' && (proj.x < -50 || proj.x > canvas.width + 50 || proj.y < -50 || proj.y > canvas.height + 50)) projectiles.splice(index, 1);});particles.forEach((part, index) => { part.x += part.vx; part.y += part.vy; part.alpha -= 0.02; if (part.alpha <= 0) { particles.splice(index, 1); return; } ctx.save(); ctx.globalAlpha = part.alpha; ctx.beginPath(); ctx.arc(part.x, part.y, part.radius, 0, Math.PI * 2); ctx.fillStyle = part.color; ctx.fill(); ctx.restore(); });document.getElementById('p1HpText').innerText = p1.hp; document.getElementById('p2HpText').innerText = p2.hp; document.getElementById('p1HpBar').style.width = (p1.hp / BASE_HP * 100) + '%'; document.getElementById('p2HpBar').style.width = (p2.hp / BASE_HP * 100) + '%';if (p1.hp <= 0 || p2.hp <= 0) { handleGameOver(); return; }ctx.restore(); requestAnimationFrame(gameLoop);}startBtn.addEventListener('click', () => {projectiles = []; obstacles = []; particles = []; zones = []; window.ninjaClone = null; announcement.innerText = '';setupPanel.style.opacity = '0'; setupPanel.style.pointerEvents = 'none'; hudText.style.opacity = '1'; hudBars.style.opacity = '1';p1 = new Ball(1, 150, canvas.height / 2, '#ff4a4a', p1Select.value); p2 = new Ball(2, canvas.width - 150, canvas.height / 2, '#4a90e2', p2Select.value);gameActive = true; gameLoop();});
+    
