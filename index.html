@@ -2,20 +2,16 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙球生存對決-手機點選版</title>
+    <title>雙球生存對決-下拉防卡版</title>
     <style>
-        * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+        * { box-sizing: border-box; }
         body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        #selectionScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; background: #111; z-index: 10; position: absolute; padding: 15px; }
-        .swipe-container { width: 100%; max-width: 320px; background: #222; border-radius: 16px; padding: 15px 50px; margin: 10px 0; text-align: center; position: relative; }
+        #selectionScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; background: #111; z-index: 10; position: absolute; padding: 20px; }
+        .player-menu-box { width: 100%; max-width: 300px; background: #222; border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center; }
         .p1-box { border: 2px solid #ff4757; } .p2-box { border: 2px solid #2ed573; }
-        .skill-title { font-size: 20px; font-weight: bold; margin: 5px 0; color: #fff; }
-        .skill-desc { font-size: 13px; color: #aaa; min-height: 36px; }
-        /* 寬大好點擊的手機專用方向鈕 */
-        .arrow { font-size: 26px; color: #f1c40f; position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; width: 45px; cursor: pointer; font-weight: bold; background: rgba(255,255,255,0.02); }
-        .arrow-l { left: 0; border-radius: 16px 0 0 16px; } .arrow-r { right: 0; border-radius: 0 16px 16px 0; }
-        .arrow:active { background: rgba(241,196,15,0.2); }
-        #startBtn { margin-top: 15px; width: 100%; max-width: 200px; padding: 14px; font-size: 18px; font-weight: bold; background: #f1c40f; border: none; border-radius: 25px; color: #000; box-shadow: 0 4px 10px rgba(241,196,15,0.3); }
+        /* 呼叫系統內建選單，防攔截 */
+        select { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; margin-top: 5px; }
+        #startBtn { margin-top: 20px; width: 100%; max-width: 200px; padding: 14px; font-size: 18px; font-weight: bold; background: #f1c40f; border: none; border-radius: 25px; color: #000; }
         #gameScreen { display: none; flex-direction: column; align-items: center; width: 100vw; }
         #scoreboard { display: flex; justify-content: space-around; width: 100%; max-width: 500px; font-size: 14px; font-weight: bold; margin-bottom: 5px; text-align: center; }
         canvas { border: 2px solid #fff; background: #050505; max-width: 95vw; max-height: 65vh; }
@@ -24,23 +20,33 @@
 </head>
 <body>
     <div id="selectionScreen">
-        <h3 style="color:#f1c40f; margin:0 0 5px 0;">⚔️ 點擊黃色箭頭選擇技能 ⚔️</h3>
-        <h4 style="color:#ff4757; margin:5px 0 0 0;">🔴 P1 (紅球) 技能</h4>
-        <div class="swipe-container p1-box">
-            <div class="arrow arrow-l" onclick="changeSkill(1, -1)">◀</div>
-            <div class="skill-title" id="p1Title">🛡️ 護盾</div>
-            <div class="skill-desc" id="p1Desc">每 10 秒發動無敵 5 秒，期間不承受任何碰撞傷害。</div>
-            <div class="arrow arrow-r" onclick="changeSkill(1, 1)">▶</div>
+        <h3 style="color:#f1c40f; margin:0 0 10px 0;">⚔️ 請選取雙方技能 ⚔️</h3>
+        
+        <div class="player-menu-box p1-box">
+            <h4 style="color:#ff4757; margin:0 0 8px 0;">🔴 玩家 1 (紅球)</h4>
+            <select id="p1Select">
+                <option value="shield">🛡️ 護盾 (無敵 5 秒)</option>
+                <option value="giant">💪 巨大 (變大加速 10 秒)</option>
+                <option value="crow">🦅 烏鴉 (穿牆追蹤敵人)</option>
+                <option value="block">🧱 障礙 (5秒放一個方塊)</option>
+                <option value="shrine">🌸 祈禱 (陣內回血加速)</option>
+            </select>
         </div>
-        <h4 style="color:#2ed573; margin:10px 0 0 0;">🟢 P2 (綠球) 技能</h4>
-        <div class="swipe-container p2-box">
-            <div class="arrow arrow-l" onclick="changeSkill(2, -1)">◀</div>
-            <div class="skill-title" id="p2Title">💪 巨大</div>
-            <div class="skill-desc" id="p2Desc">每 15 秒體型變大 2 倍且移動加速，持續 10 秒。</div>
-            <div class="arrow arrow-r" onclick="changeSkill(2, 1)">▶</div>
+
+        <div class="player-menu-box p2-box">
+            <h4 style="color:#2ed573; margin:0 0 8px 0;">🟢 玩家 2 (綠球)</h4>
+            <select id="p2Select">
+                <option value="shield">🛡️ 護盾 (無敵 5 秒)</option>
+                <option value="giant" selected>💪 巨大 (變大加速 10 秒)</option>
+                <option value="crow">🦅 烏鴉 (穿牆追蹤敵人)</option>
+                <option value="block">🧱 障礙 (5秒放一個方塊)</option>
+                <option value="shrine">🌸 祈禱 (陣內回血加速)</option>
+            </select>
         </div>
-        <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥</button>
+
+        <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥 ⚔️</button>
     </div>
+
     <div id="gameScreen">
         <div id="scoreboard">
             <div style="color:#ff4757">紅球: <span id="hp1">2000</span> HP<div id="st1" style="font-size:10px;color:#aaa"></div></div>
@@ -48,41 +54,25 @@
         </div>
         <canvas id="gameCanvas" width="600" height="400"></canvas>
     </div>
+
     <div id="gameOverScreen">
         <h3 id="winnerText" style="color:#f1c40f;margin:0 0 15px 0;"></h3>
         <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff; color:#000;">返回選擇</button>
     </div>
+
     <script>
         const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
         const selectionScreen = document.getElementById("selectionScreen"), gameScreen = document.getElementById("gameScreen"), gameOverScreen = document.getElementById("gameOverScreen"), winnerText = document.getElementById("winnerText");
         const hp1Display = document.getElementById("hp1"), hp2Display = document.getElementById("hp2"), st1Display = document.getElementById("st1"), st2Display = document.getElementById("st2");
-        let gameActive = false, obstacles = [], crows = [], zones = [], timers = [], p1Idx = 0, p2Idx = 1;
+        let gameActive = false, obstacles = [], crows = [], zones = [], timers = [];
         const centerBox = { x: 260, y: 160, width: 80, height: 80, color: "#f1c40f" };
-
-        const skillsList = [
-            { id: 'shield', title: "🛡️ 護盾", desc: "每 10 秒發動無敵 5 秒，期間不承受任何碰撞傷害。" },
-            { id: 'giant', title: "💪 巨大", desc: "每 15 秒體型變大 2 倍且移動加速，持續 10 秒。" },
-            { id: 'crow', title: "🦅 烏鴉", desc: "每 5 秒召喚一隻穿牆老鷹，自動追蹤並炸擊對手。" },
-            { id: 'block', title: "🧱 障礙", desc: "每 5 秒在身後留下一塊無法被破壞的同體積方塊。" },
-            { id: 'shrine', title: "🌸 祈禱", desc: "每 10 秒召喚櫻花陣(5s)，在陣內可瘋狂回血與加速。" }
-        ];
-
-        // 點擊箭頭按鈕切換技能
-        function changeSkill(player, dir) {
-            if (player === 1) { p1Idx = (p1Idx + dir + skillsList.length) % skillsList.length; updateSwipeUI(1); } 
-            else { p2Idx = (p2Idx + dir + skillsList.length) % skillsList.length; updateSwipeUI(2); }
-        }
-
-        function updateSwipeUI(p) {
-            if (p === 1) { document.getElementById("p1Title").innerText = skillsList[p1Idx].title; document.getElementById("p1Desc").innerText = skillsList[p1Idx].desc; } 
-            else { document.getElementById("p2Title").innerText = skillsList[p2Idx].title; document.getElementById("p2Desc").innerText = skillsList[p2Idx].desc; }
-        }
 
         class Crow {
             constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 3.5; }
             move() { let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy); if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; } }
             draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color === "#ff4757" ? "#ff7675" : "#55efc4"; ctx.fill(); ctx.closePath(); ctx.fillStyle = "#fff"; ctx.font = "10px sans-serif"; ctx.fillText("🦅", this.x - 6, this.y + 4); }
         }
+
         class Ball {
             constructor(x, y, c, n, h, st) { this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c; this.vx = c === "#ff4757" ? 5 : -5; this.vy = 4; this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy); this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.isInvincible = false; this.isInShrine = false; }
             draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath(); if (this.isInvincible) { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); } }
@@ -100,7 +90,14 @@
             else if (s === 'shrine') { b.statusElement.innerText = "🌸 祈禱冷卻中"; let t = setInterval(() => { if (!gameActive) return; let zX = Math.random() * (canvas.width - 160) + 80, zY = Math.random() * (canvas.height - 160) + 80; zones.push({ x: zX, y: zY, radius: 60, owner: b }); b.statusElement.innerText = "🌸 結界展開!"; let it = setTimeout(() => { zones = zones.filter(z => z.owner !== b); b.statusElement.innerText = "🌸 祈禱冷卻中"; }, 5000); timers.push(it); }, 10000); timers.push(t); }
         }
 
-        function startGame() { selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true; b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display); b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display); hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; zones = []; timers = []; setupSkill(b1, b2, skillsList[p1Idx].id); setupSkill(b2, b1, skillsList[p2Idx].id); gameLoop(); }
+        function startGame() {
+            const s1 = document.getElementById("p1Select").value; const s2 = document.getElementById("p2Select").value;
+            selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true;
+            b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display); b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display);
+            hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; zones = []; timers = [];
+            setupSkill(b1, b2, s1); setupSkill(b2, b1, s2); gameLoop();
+        }
+
         function checkBallRectCollision(b, r) { let cx = Math.max(r.x, Math.min(b.x, r.x + r.width)), cy = Math.max(r.y, Math.min(b.y, r.y + r.height)), dx = b.x - cx, dy = b.y - cy, dSq = (dx*dx)+(dy*dy); if (dSq < (b.radius*b.radius)) { let d = Math.sqrt(dSq); if (d === 0) return; b.x += (dx/d)*(b.radius-d); b.y += (dy/d)*(b.radius-d); if (Math.abs(dx/d) > Math.abs(dy/d)) { b.vx = -b.vx; } else { b.vy = -b.vy; } } }
         function checkBallCollision(ball1, ball2) { let dx = ball2.x - ball1.x, dy = ball2.y - ball1.y, d = Math.sqrt(dx*dx + dy*dy), minDist = ball1.radius + ball2.radius; if (d < minDist) { let dmg1 = Math.floor(Math.random()*151)+150, dmg2 = Math.floor(Math.random()*151)+150; ball1.takeDamage(dmg1); ball2.takeDamage(dmg2); let nx = dx/d, ny = dy/d, o = minDist - d; ball1.x -= nx*(o/2); ball1.y -= ny*(o/2); ball2.x += nx*(o/2); ball2.y += ny*(o/2); let kx = ball1.vx - ball2.vx, ky = ball1.vy - ball2.vy, p = nx*kx + ny*ky; if (p > 0) { ball1.vx -= p*nx; ball1.vy -= p*ny; ball2.vx += p*nx; ball2.vy += p*ny; } } }
         function gameLoop() { if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height); b1.isInShrine = false; b2.isInShrine = false; zones.forEach(z => { ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.fillStyle = "rgba(255, 121, 121, 0.15)"; ctx.fill(); ctx.strokeStyle = "rgba(255, 159, 243, 0.6)"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath(); ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.font = "12px sans-serif"; ctx.fillText("🌸", z.x - 6, z.y + 5); let zdx = z.owner.x - z.x, zdy = z.owner.y - z.y, zdist = Math.sqrt(zdx*zdx + zdy*zdy); if (zdist < z.radius) { z.owner.isInShrine = true; z.owner.heal(3); } }); obstacles.forEach(r => { ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.width, r.height); checkBallRectCollision(b1, r); checkBallRectCollision(b2, r); }); for (let i = crows.length - 1; i >= 0; i--) { let c = crows[i]; c.move(); c.draw(); let tdx = c.target.x - c.x, tdy = c.target.y - c.y, td = Math.sqrt(tdx*tdx + tdy*tdy); if (td < c.target.radius + c.radius) { c.target.takeDamage(220); crows.splice(i, 1); } } b1.move(); b2.move(); checkBallCollision(b1, b2); b1.draw(); b2.draw(); requestAnimationFrame(gameLoop); }
@@ -109,3 +106,4 @@
     </script>
 </body>
 </html>
+
