@@ -107,3 +107,116 @@
 </body>
 </html>
 
+
+<!-- ========================================== -->
+<!-- 以下為音樂音效補丁引擎：直接加在最下面即可 -->
+<!-- ========================================== -->
+<script>
+    // 🎵 Web Audio API 復古合成音效引擎
+    let audioCtx = null, bgmInterval = null;
+    
+    function initAudio() { 
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); 
+    }
+    
+    function playSound(freq, type, duration, vol) {
+        if (!audioCtx) return; 
+        try {
+            let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = type; 
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime); 
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain); 
+            gain.connect(audioCtx.destination); 
+            osc.start(); 
+            osc.stop(audioCtx.currentTime + duration);
+        } catch(e){}
+    }
+    
+    // 循環播放 8-bit 電子背景音樂
+    function startBGM() {
+        if (bgmInterval) clearInterval(bgmInterval);
+        let notes = [261.63, 293.66, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66]; // 基礎音階
+        let step = 0;
+        bgmInterval = setInterval(() => {
+            if (!gameActive) return;
+            // 播放旋律
+            playSound(notes[step % notes.length], 'square', 0.15, 0.02);
+            // 每4拍加一個重低音
+            if(step % 4 === 0) playSound(80, 'triangle', 0.12, 0.08); 
+            step++;
+        }, 220);
+    }
+
+    // 覆寫並強植注入原本的 startGame 與 endGame 函數，確保音效啟動
+    const originalStartGame = window.startGame;
+    window.startGame = function() {
+        initAudio(); 
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        // 先執行原本的開始邏輯
+        if (typeof originalStartGame === 'function') {
+            originalStartGame();
+        } else {
+            // 如果原本的沒跑，強制手動啟動
+            const s1 = document.getElementById("p1Select").value; 
+            const s2 = document.getElementById("p2Select").value;
+            selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true;
+            b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display); 
+            b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display);
+            hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; zones = []; timers = [];
+            setupSkill(b1, b2, s1); setupSkill(b2, b1, s2); gameLoop();
+        }
+        startBGM(); // 啟動背景音樂
+    };
+
+    const originalEndGame = window.endGame;
+    window.endGame = function(m) {
+        clearInterval(bgmInterval);
+        playSound(150, 'sawtooth', 0.6, 0.15); // 播放失敗/結束音效
+        if (typeof originalEndGame === 'function') {
+            originalEndGame(m);
+        } else {
+            gameActive = false;
+            timers.forEach(t => { clearInterval(t); clearTimeout(t); });
+            winnerText.innerText = m; gameOverScreen.style.display = "block";
+        }
+    };
+
+    // 重新注入技能與碰撞音效
+    const originalSetupSkill = window.setupSkill;
+    window.setupSkill = function(b, e, s) {
+        if (typeof originalSetupSkill === 'function') originalSetupSkill(b, e, s);
+        // 每當技能觸發時，多加一段聲音
+        if (s === 'shield') { let t = setInterval(() => { if (gameActive) playSound(880, 'sine', 0.3, 0.05); }, 10000); timers.push(t); }
+        else if (s === 'giant') { let t = setInterval(() => { if (gameActive) playSound(220, 'sawtooth', 0.4, 0.04); }, 15000); timers.push(t); }
+        else if (s === 'block') { let t = setInterval(() => { if (gameActive) playSound(440, 'triangle', 0.1, 0.03); }, 5000); timers.push(t); }
+    };
+
+    // 每格監聽特殊碰撞並發出聲音
+    let lastB1Hp = 2000, lastB2Hp = 2000;
+    let oldGameLoop = window.gameLoop;
+    window.gameLoop = function() {
+        if (!gameActive) return;
+        if (typeof oldGameLoop === 'function') oldGameLoop();
+        
+        // 偵測血量變化來播放受傷/碰撞/補血音效
+        if (window.b1 && window.b2) {
+            if (b1.hp < lastB1Hp) { playSound(587.33, 'square', 0.1, 0.05); } // P1受傷/被烏鴉炸
+            if (b2.hp < lastB2Hp) { playSound(587.33, 'square', 0.1, 0.05); } // P2受傷/被烏鴉炸
+            if (b1.isInShrine && Math.random() < 0.1) { playSound(987.77, 'sine', 0.03, 0.02); } // 巫女補血綠光音效
+            if (b2.isInShrine && Math.random() < 0.1) { playSound(987.77, 'sine', 0.03, 0.02); }
+            lastB1Hp = b1.hp; lastB2Hp = b2.hp;
+        }
+        
+        // 簡單的牆壁反彈音效偵測
+        if (window.b1 && (b1.x <= b1.radius+5 || b1.x >= canvas.width-b1.radius-5 || b1.y <= b1.radius+5 || b1.y >= canvas.height-b1.radius-5)) {
+            playSound(349.23, 'triangle', 0.04, 0.03);
+        }
+        if (window.b2 && (b2.x <= b2.radius+5 || b2.x >= canvas.width-b2.radius-5 || b2.y <= b2.radius+5 || b2.y >= canvas.height-b2.radius-5)) {
+            playSound(349.23, 'triangle', 0.04, 0.03);
+        }
+    };
+</script>
