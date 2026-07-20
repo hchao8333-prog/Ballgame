@@ -54,9 +54,7 @@
         <h3 id="winnerText" style="color:#f1c40f;margin:0 0 15px 0;"></h3>
         <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff; color:#000; cursor:pointer;">返回選擇</button>
     </div>
-
     <script>
-        // 1. 初始化 DOM 節點與基本全域變數
         const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
         const selectionScreen = document.getElementById("selectionScreen"), gameScreen = document.getElementById("gameScreen"), gameOverScreen = document.getElementById("gameOverScreen"), winnerText = document.getElementById("winnerText");
         const hp1Display = document.getElementById("hp1"), hp2Display = document.getElementById("hp2"), st1Display = document.getElementById("st1"), st2Display = document.getElementById("st2");
@@ -66,7 +64,6 @@
         const centerBox = { x: 260, y: 160, width: 80, height: 80, color: "#f1c40f" };
         let audioCtx = null, bgmInterval = null;
 
-        // 2. 最頂層宣告音效系統，確保後續任何類別在初始化或觸發大絕時能順利呼叫
         function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
         function playSound(freq, type, duration, vol) {
             if (!audioCtx) return; try {
@@ -86,8 +83,6 @@
                 step++;
             }, 220);
         }
-
-        // 3. 宣告各類實體 (烏鴉、月神飛彈、月神本體)
         class Crow {
             constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 5; this.isBreaker = false; }
             move() { 
@@ -150,134 +145,136 @@
                 ctx.beginPath(); ctx.arc(this.x, this.y, 25, 0, Math.PI*2); ctx.strokeStyle = "rgba(241, 196, 15, 0.5)"; ctx.lineWidth = 1.5; ctx.stroke(); ctx.closePath();
             }
         }
-
-        // 4. 核心：大絕瞬間觸發判定邏輯
         function triggerUltimateSkill(ball, opponent) {
-ball.baseRadius = 22; ball.radius = ball.isGiant ? ball.radius : 22;
-if (ball.skillType === 'shield') {
-ball.isInvincible = true; ball.reflectActive = true; ball.statusElement.innerText = "🚨 覺醒：全傷害反彈！";
-setTimeout(() => { ball.isInvincible = false; ball.reflectActive = false; }, 6000);
-} else if (ball.skillType === 'giant') {
-ball.isGiant = true; ball.radius = ball.baseRadius * 4; ball.vx = 2.0; ball.vy = 2.0; ball.statusElement.innerText = "👑 覺醒：兩倍泰坦暴走！";
-setTimeout(() => {
-ball.isGiant = false; ball.radius = ball.baseRadius;
-ball.vx = ball.vx > 0 ? ball.baseSpeedX * 1.3 : -ball.baseSpeedX * 1.3; ball.vy = ball.vy > 0 ? ball.baseSpeedY * 1.3 : -ball.baseSpeedY * 1.3;
-}, 10000);
-} else if (ball.skillType === 'crow') {
-ball.statusElement.innerText = "🦅 覺醒：破滅召喚！";
-let cr = new Crow(ball.x, ball.y, opponent, ball.color); cr.isBreaker = true; cr.speed = 7; cr.radius = 12; crows.push(cr);
-} else if (ball.skillType === 'block') {
-ball.statusElement.innerText = "🧱 覺醒：全場方塊引爆！";
-let myObs = obstacles.filter(o => o.owner === ball);
-myObs.forEach(obs => {
-explosions.push({ x: obs.x + obs.width/2, y: obs.y + obs.height/2, radius: 90, timer: 15 });
-let dx = opponent.x - (obs.x + obs.width/2), dy = opponent.y - (obs.y + obs.height/2);
-if (Math.sqrt(dxdx + dydy) < 90 + opponent.radius && !opponent.isInvincible) opponent.hp -= 350;
-});
-obstacles = obstacles.filter(o => o.owner !== ball); playSound(100, 'sawtooth', 0.4, 0.3);
-} else if (ball.skillType === 'shrine') {
-ball.statusElement.innerText = "🌙 覺醒：月神臨世(自帶回血)！"; lunars.push(new LunarGod(ball.x, ball.y, ball, opponent));
-}
-}
-// 5. 宣告主要玩家球體類別
-class Ball {
-constructor(x, y, c, n, h, st, skill) {
-this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c;
-this.vx = c === "#ff4757" ? 10.5 : -10.5; this.vy = 7;
-this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy);
-this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.skillType = skill;
-this.isInvincible = false; this.isInShrine = false; this.isGiant = false; this.isAwake = false; this.speedDebuff = 1.0; this.reflectActive = false;
-}
-draw() {
-if (this.isAwake) {
-ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 12, 0, Math.PI2); ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 4; ctx.stroke(); ctx.closePath();
-}
-ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
-if (this.isInvincible) {
-ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = this.reflectActive ? "#f1c40f" : "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath();
-}
-}
-move() {
-if (this.hp <= 1000 && !this.isAwake) {
-this.isAwake = true; playSound(987, 'sawtooth', 0.5, 0.25); triggerUltimateSkill(this, this === b1 ? b2 : b1);
-}
-let currentSpeedMultiplier = (this.isInShrine ? 1.5 : 1.0) * this.speedDebuff;
-this.x += this.vx * currentSpeedMultiplier; this.y += this.vy * currentSpeedMultiplier;
-if (this.x - this.radius < 0) { this.x = this.radius; this.vx = Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); }
-else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); }
-if (this.y - this.radius < 0) { this.y = this.radius; this.vy = Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
-else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
-if (this.x + this.radius > centerBox.x && this.x - this.radius < centerBox.x + centerBox.width && this.y + this.radius > centerBox.y && this.y - this.radius < centerBox.y + centerBox.height) {
-let overlapX = Math.min(this.x + this.radius - centerBox.x, centerBox.x + centerBox.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - centerBox.y, centerBox.y + centerBox.height - (this.y - this.radius));
-if (overlapX < overlapY) { this.vx = this.x < centerBox.x + centerBox.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < centerBox.y + centerBox.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
-playSound(440, 'triangle', 0.05, 0.05);
-}
-obstacles.forEach((obs) => {
-if (this.x + this.radius > obs.x && this.x - this.radius < obs.x + obs.width && this.y + this.radius > obs.y && this.y - this.radius < obs.y + obs.height) {
-let overlapX = Math.min(this.x + this.radius - obs.x, obs.x + obs.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - obs.y, obs.y + obs.height - (this.y - this.radius));
-if (overlapX < overlapY) { this.vx = this.x < obs.x + obs.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < obs.y + obs.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
-playSound(290, 'triangle', 0.04, 0.04);
-}
-});
-}
-}
-// 6. 物理碰撞與防護盾傷害反彈計算
-function checkBallCollision() {
-let dx = b2.x - b1.x, dy = b2.y - b1.y, dist = Math.sqrt(dxdx + dydy);
-if (dist < b1.radius + b2.radius) {
-let normalX = dx / dist, normalY = dy / dist, kx = b1.vx - b2.vx, ky = b1.vy - b2.vy;
-let p = 2 * (normalX * kx + normalY * ky) / 2; b1.vx -= p * normalX; b1.vy -= p * normalY; b2.vx += p * normalX; b2.vy += p * normalY;
-let d1 = b2.isGiant ? 160 : 80, d2 = b1.isGiant ? 160 : 80;
-if (b2.isAwake) d1 *= 1.3; if (b1.isAwake) d2 *= 1.3;
-if (b1.isInvincible) { if (b1.reflectActive && !b2.isInvincible) b2.hp -= Math.floor(d1); d1 = 0; }
-if (b2.isInvincible) { if (b2.reflectActive && !b1.isInvincible) b1.hp -= Math.floor(d2); d2 = 0; }
-b1.hp -= Math.floor(d1); b2.hp -= Math.floor(d2); playSound(150, 'sawtooth', 0.15, 0.15);
-}
-}
-// 7. 自動技能發動機制與計時調度
-function startSkillLoop(ball, opponent) {
-let cd = ball.skillType === 'crow' ? 10000 : 5000;
-let timer = setInterval(() => { if (gameActive) executeSkill(ball, opponent); }, cd);
-timers.push(timer);
-}
-function executeSkill(ball, opponent) {
-if(ball.statusElement.innerText === "") ball.statusElement.innerText = "技能發動!";
-setTimeout(() => { if(!ball.isAwake) ball.statusElement.innerText = ""; }, 1500);
-if (ball.skillType === 'shield') {
-ball.isInvincible = true; setTimeout(() => ball.isInvincible = false, 5000);
-} else if (ball.skillType === 'giant') {
-ball.isGiant = true; ball.radius = ball.baseRadius * 2; ball.vx *= 1.4; ball.vy *= 1.4;
-setTimeout(() => {
-ball.isGiant = false; ball.radius = ball.baseRadius;
-ball.vx = ball.vx > 0 ? ball.baseSpeedX : -ball.baseSpeedX; ball.vy = ball.vy > 0 ? ball.baseSpeedY : -ball.baseSpeedY;
-}, 10000);
-} else if (ball.skillType === 'crow') {
-crows.push(new Crow(ball.x, ball.y, opponent, ball.color));
-} else if (ball.skillType === 'block') {
-obstacles.push({ x: ball.x - 20, y: ball.y - 20, width: 40, height: 40, owner: ball });
-if (obstacles.length > 5) obstacles.shift();
-} else if (ball.skillType === 'shrine') {
-let zRadius = ball.isAwake ? 180 : 120;
-let zone = { x: ball.x, y: ball.y, radius: zRadius, owner: ball, isAwakeZone: ball.isAwake };
-zones.push(zone); setTimeout(() => { zones = zones.filter(z => z !== zone); }, 4000);
-}
-}
-// 8. 主遊戲引擎渲染循環 (繪製與狀態同步)
-function gameLoop() {
-if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height);
-ctx.fillStyle = centerBox.color; ctx.fillRect(centerBox.x, centerBox.y, centerBox.width, centerBox.height);
-ctx.fillStyle = "#000"; ctx.font = "bold 14px sans-serif"; ctx.fillText("⚔️", centerBox.x + 30, centerBox.y + 45);
-b1.speedDebuff = 1.0; b2.speedDebuff = 1.0; b1.isInShrine = false; b2.isInShrine = false;
-zones.forEach(z => {
-ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
-if (z.isAwakeZone) {
-let grad = ctx.createRadialGradient(z.x, z.y, z.radius * 0.2, z.x, z.y, z.radius);
-grad.addColorStop(0, z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.3)" : "rgba(46, 213, 115, 0.3)");
-grad.addColorStop(0.7, "rgba(241, 196, 15, 0.2)"); grad.addColorStop(1, "rgba(241, 196, 15, 0)"); ctx.fillStyle = grad; ctx.fill();
-ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 2; ctx.stroke();
-} else {
-ctx.fillStyle = z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.12)" : "rgba(46, 213, 115, 0.12)"; ctx.fill();
-}
+            ball.baseRadius = 22; ball.radius = ball.isGiant ? ball.radius : 22;
+            if (ball.skillType === 'shield') {
+                ball.isInvincible = true; ball.reflectActive = true; ball.statusElement.innerText = "🚨 覺醒：全傷害反彈！";
+                setTimeout(() => { ball.isInvincible = false; ball.reflectActive = false; }, 6000);
+            } else if (ball.skillType === 'giant') {
+                ball.isGiant = true; ball.radius = ball.baseRadius * 4; ball.vx *= 2.0; ball.vy *= 2.0; ball.statusElement.innerText = "👑 覺醒：兩倍泰坦暴走！";
+                setTimeout(() => {
+                    ball.isGiant = false; ball.radius = ball.baseRadius;
+                    ball.vx = ball.vx > 0 ? ball.baseSpeedX * 1.3 : -ball.baseSpeedX * 1.3; ball.vy = ball.vy > 0 ? ball.baseSpeedY * 1.3 : -ball.baseSpeedY * 1.3;
+                }, 10000);
+            } else if (ball.skillType === 'crow') {
+                ball.statusElement.innerText = "🦅 覺醒：破滅召喚！";
+                let cr = new Crow(ball.x, ball.y, opponent, ball.color); cr.isBreaker = true; cr.speed = 7; cr.radius = 12; crows.push(cr);
+            } else if (ball.skillType === 'block') {
+                ball.statusElement.innerText = "🧱 覺醒：全場方塊引爆！";
+                let myObs = obstacles.filter(o => o.owner === ball);
+                myObs.forEach(obs => {
+                    explosions.push({ x: obs.x + obs.width/2, y: obs.y + obs.height/2, radius: 90, timer: 15 });
+                    let dx = opponent.x - (obs.x + obs.width/2), dy = opponent.y - (obs.y + obs.height/2);
+                    if (Math.sqrt(dx*dx + dy*dy) < 90 + opponent.radius && !opponent.isInvincible) opponent.hp -= 350;
+                });
+                obstacles = obstacles.filter(o => o.owner !== ball); playSound(100, 'sawtooth', 0.4, 0.3);
+            } else if (ball.skillType === 'shrine') {
+                ball.statusElement.innerText = "🌙 覺醒：月神臨世(自帶回血)！"; lunars.push(new LunarGod(ball.x, ball.y, ball, opponent));
+            }
+        }
+
+        class Ball {
+            constructor(x, y, c, n, h, st, skill) {
+                this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c;
+                this.vx = c === "#ff4757" ? 10.5 : -10.5; this.vy = 7;
+                this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy);
+                this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.skillType = skill;
+                this.isInvincible = false; this.isInShrine = false; this.isGiant = false; this.isAwake = false; this.speedDebuff = 1.0; this.reflectActive = false; 
+            }
+            draw() {
+                if (this.isAwake) {
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 12, 0, Math.PI*2); ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 4; ctx.stroke(); ctx.closePath();
+                }
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
+                if (this.isInvincible) { 
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = this.reflectActive ? "#f1c40f" : "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); 
+                }
+            }
+            move() {
+                if (this.hp <= 1000 && !this.isAwake) {
+                    this.isAwake = true; playSound(987, 'sawtooth', 0.5, 0.25); triggerUltimateSkill(this, this === b1 ? b2 : b1);
+                }
+                let currentSpeedMultiplier = (this.isInShrine ? 1.5 : 1.0) * this.speedDebuff;
+                this.x += this.vx * currentSpeedMultiplier; this.y += this.vy * currentSpeedMultiplier;
+                
+                if (this.x - this.radius < 0) { this.x = this.radius; this.vx = Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); } 
+                else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -Math.abs(this.vx); playSound(349, 'triangle', 0.04, 0.03); }
+                if (this.y - this.radius < 0) { this.y = this.radius; this.vy = Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
+                else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -Math.abs(this.vy); playSound(349, 'triangle', 0.04, 0.03); }
+
+                if (this.x + this.radius > centerBox.x && this.x - this.radius < centerBox.x + centerBox.width && this.y + this.radius > centerBox.y && this.y - this.radius < centerBox.y + centerBox.height) {
+                    let overlapX = Math.min(this.x + this.radius - centerBox.x, centerBox.x + centerBox.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - centerBox.y, centerBox.y + centerBox.height - (this.y - this.radius));
+                    if (overlapX < overlapY) { this.vx = this.x < centerBox.x + centerBox.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < centerBox.y + centerBox.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
+                    playSound(440, 'triangle', 0.05, 0.05);
+                }
+                obstacles.forEach((obs) => {
+                    if (this.x + this.radius > obs.x && this.x - this.radius < obs.x + obs.width && this.y + this.radius > obs.y && this.y - this.radius < obs.y + obs.height) {
+                        let overlapX = Math.min(this.x + this.radius - obs.x, obs.x + obs.width - (this.x - this.radius)), overlapY = Math.min(this.y + this.radius - obs.y, obs.y + obs.height - (this.y - this.radius));
+                        if (overlapX < overlapY) { this.vx = this.x < obs.x + obs.width/2 ? -Math.abs(this.vx) : Math.abs(this.vx); } else { this.vy = this.y < obs.y + obs.height/2 ? -Math.abs(this.vy) : Math.abs(this.vy); }
+                        playSound(290, 'triangle', 0.04, 0.04);
+                    }
+                });
+            }
+        }
+
+        function checkBallCollision() {
+            let dx = b2.x - b1.x, dy = b2.y - b1.y, dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < b1.radius + b2.radius) {
+                let normalX = dx / dist, normalY = dy / dist, kx = b1.vx - b2.vx, ky = b1.vy - b2.vy;
+                let p = 2 * (normalX * kx + normalY * ky) / 2; b1.vx -= p * normalX; b1.vy -= p * normalY; b2.vx += p * normalX; b2.vy += p * normalY;
+                let d1 = b2.isGiant ? 160 : 80, d2 = b1.isGiant ? 160 : 80;
+                if (b2.isAwake) d1 *= 1.3; if (b1.isAwake) d2 *= 1.3;
+                if (b1.isInvincible) { if (b1.reflectActive && !b2.isInvincible) b2.hp -= Math.floor(d1); d1 = 0; }
+                if (b2.isInvincible) { if (b2.reflectActive && !b1.isInvincible) b1.hp -= Math.floor(d2); d2 = 0; }
+                b1.hp -= Math.floor(d1); b2.hp -= Math.floor(d2); playSound(150, 'sawtooth', 0.15, 0.15);
+            }
+        }
+
+        function startSkillLoop(ball, opponent) {
+            let cd = ball.skillType === 'crow' ? 10000 : 5000;
+            let timer = setInterval(() => { if (gameActive) executeSkill(ball, opponent); }, cd);
+            timers.push(timer);
+        }
+
+        function executeSkill(ball, opponent) {
+            if(ball.statusElement.innerText === "") ball.statusElement.innerText = "技能發動!";
+            setTimeout(() => { if(!ball.isAwake) ball.statusElement.innerText = ""; }, 1500);
+            if (ball.skillType === 'shield') {
+                ball.isInvincible = true; setTimeout(() => ball.isInvincible = false, 5000);
+            } else if (ball.skillType === 'giant') {
+                ball.isGiant = true; ball.radius = ball.baseRadius * 2; ball.vx *= 1.4; ball.vy *= 1.4;
+                setTimeout(() => {
+                    ball.isGiant = false; ball.radius = ball.baseRadius;
+                    ball.vx = ball.vx > 0 ? ball.baseSpeedX : -ball.baseSpeedX; ball.vy = ball.vy > 0 ? ball.baseSpeedY : -ball.baseSpeedY;
+                }, 10000);
+            } else if (ball.skillType === 'crow') {
+                crows.push(new Crow(ball.x, ball.y, opponent, ball.color));
+            } else if (ball.skillType === 'block') {
+                obstacles.push({ x: ball.x - 20, y: ball.y - 20, width: 40, height: 40, owner: ball });
+                if (obstacles.length > 5) obstacles.shift();
+            } else if (ball.skillType === 'shrine') {
+                let zRadius = ball.isAwake ? 180 : 120;
+                let zone = { x: ball.x, y: ball.y, radius: zRadius, owner: ball, isAwakeZone: ball.isAwake };
+                zones.push(zone); setTimeout(() => { zones = zones.filter(z => z !== zone); }, 4000);
+            }
+        }
+
+        function gameLoop() {
+            if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = centerBox.color; ctx.fillRect(centerBox.x, centerBox.y, centerBox.width, centerBox.height);
+            ctx.fillStyle = "#000"; ctx.font = "bold 14px sans-serif"; ctx.fillText("⚔️", centerBox.x + 30, centerBox.y + 45);
+
+            b1.speedDebuff = 1.0; b2.speedDebuff = 1.0; b1.isInShrine = false; b2.isInShrine = false;
+            zones.forEach(z => {
+                ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
+                if (z.isAwakeZone) {
+                    let grad = ctx.createRadialGradient(z.x, z.y, z.radius * 0.2, z.x, z.y, z.radius);
+                    grad.addColorStop(0, z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.3)" : "rgba(46, 213, 115, 0.3)");
+                    grad.addColorStop(0.7, "rgba(241, 196, 15, 0.2)"); grad.addColorStop(1, "rgba(241, 196, 15, 0)"); ctx.fillStyle = grad; ctx.fill();
+                    ctx.strokeStyle = "rgba(241, 196, 15, 0.6)"; ctx.lineWidth = 2; ctx.stroke();
+                } else {
+                    ctx.fillStyle = z.owner.color === "#ff4757" ? "rgba(255, 71, 87, 0.12)" : "rgba(46, 213, 115, 0.12)"; ctx.fill();
+                }
 ctx.closePath();
 let dist1 = Math.sqrt((z.x - b1.x)2 + (z.y - b1.y)2), dist2 = Math.sqrt((z.x - b2.x)2 + (z.y - b2.y)2);
 if (z.owner === b1 && dist1 < z.radius) { b1.isInShrine = true; b1.hp = Math.min(2000, b1.hp + (z.isAwakeZone ? 4 : 1.5)); }
@@ -312,7 +309,6 @@ return;
 }
 requestAnimationFrame(gameLoop);
 }
-// 9. 遊戲生命週期控制 (開始與返回)
 function startGame() {
 initAudio(); selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none";
 obstacles = []; crows = []; zones = []; timers = []; lunars = []; explosions = []; gameActive = true; st1Display.innerText = ""; st2Display.innerText = "";
@@ -320,4 +316,4 @@ b1 = new Ball(100, 200, "#ff4757", "紅球", hp1Display, st1Display, document.ge
 b2 = new Ball(500, 200, "#2ed573", "綠球", hp2Display, st2Display, document.getElementById("p2Select").value);
 startSkillLoop(b1, b2); startSkillLoop(b2, b1); startBGM(); requestAnimationFrame(gameLoop);
 }
-function backToSelection() { timers.forEach(t => clearInterval(t)); clearInterval(bgmInterval); gameActive = false; gameOverScreen.style.display = "none"; gameScreen.style.display = "none"; selectionScreen.style.display = "flex";
+function backToSelection() { timers.forEach(t => clearInterval(t)); clearInterval(bgmInterval); gameActive = false; gameOverScreen.style.display = "none"; gameScreen.style.display = "none"; selectionScreen.style.display = "flex"; }
