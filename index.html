@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -54,7 +53,6 @@
         <h3 id="winnerText" style="color:#f1c40f;margin:0 0 15px 0;"></h3>
         <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff; color:#000;">返回選擇</button>
     </div>
-
     <script>
         const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
         const selectionScreen = document.getElementById("selectionScreen"), gameScreen = document.getElementById("gameScreen"), gameOverScreen = document.getElementById("gameOverScreen"), winnerText = document.getElementById("winnerText");
@@ -115,10 +113,9 @@
                 if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; playSound(349, 'triangle', 0.04, 0.03); } 
                 else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; playSound(349, 'triangle', 0.04, 0.03); }
             }
-            takeDamage(a) { if (this.isInvincible) return; this.hp -= a; if (this.hp < 0) this.hp = 0; this.hpElement.innerText = this.hp; if (this.hp <= 0 && gameActive) endGame(this.name === "P1" ? "玩家 2 獲獲勝！" : "玩家 1 獲勝！"); }
+            takeDamage(a) { if (this.isInvincible) return; this.hp -= a; if (this.hp < 0) this.hp = 0; this.hpElement.innerText = this.hp; if (this.hp <= 0 && gameActive) endGame(this.name === "P1" ? "玩家 2 獲勝！" : "玩家 1 獲勝！"); }
             heal(a) { this.hp += a; if (this.hp > 2000) this.hp = 2000; this.hpElement.innerText = this.hp; }
         }
-
         function setupSkill(b, e, s) {
             if (s === 'shield') {
                 b.statusElement.innerText = "🛡️ 冷卻中";
@@ -208,50 +205,15 @@
             }
         }
 
-               function gameLoop() {
-            if (!gameActive) return; 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 🩸 修正後的血量偵測：只要在戰鬥中血量低於 1000，且尚未覺醒，就立刻發動！
-            if (window.b1 && b1.hp <= 1000 && !isAwake1) { 
-                isAwake1 = true; 
-                b1.statusElement.innerText = "🔥 殘血覺醒！"; 
-                triggerAwakeInstant(b1, b2); 
-            }
-            if (window.b2 && b2.hp <= 1000 && !isAwake2) { 
-                isAwake2 = true; 
-                b2.statusElement.innerText = "🔥 殘血覺醒！"; 
-                triggerAwakeInstant(b2, b1); 
-            }
-
+        function gameLoop() {
+            if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (window.b1 && b1.hp <= 1000 && !isAwake1) { isAwake1 = true; b1.statusElement.innerText = "🔥 殘血覺醒！"; triggerAwakeInstant(b1, b2); }
+            if (window.b2 && b2.hp <= 1000 && !isAwake2) { isAwake2 = true; b2.statusElement.innerText = "🔥 殘血覺醒！"; triggerAwakeInstant(b2, b1); }
             b1.isInShrine = false; b2.isInShrine = false;
             zones.forEach(z => {
                 ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.fillStyle = "rgba(255, 121, 121, 0.15)"; ctx.fill(); ctx.strokeStyle = "rgba(255, 159, 243, 0.6)"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
                 ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.font = "12px sans-serif"; ctx.fillText("🌸", z.x - 6, z.y + 5);
                 let zdx = z.owner.x - z.x, zdy = z.owner.y - z.y, zdist = Math.sqrt(zdx*zdx + zdy*zdy); if (zdist < z.radius) { z.owner.isInShrine = true; z.owner.heal(4); if (Math.random() < 0.1) playSound(1000, 'sine', 0.02, 0.02); }
-            });
-
-            if (isAwake1 && b1.skillType === 'shrine') drawLunarGod(b1, b2);
-            if (isAwake2 && b2.skillType === 'shrine') drawLunarGod(b2, b1);
-
-            obstacles.forEach(r => { ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.width, r.height); checkBallRectCollision(b1, r); checkBallRectCollision(b2, r); });
-            
-            for (let i = crows.length - 1; i >= 0; i--) {
-                let c = crows[i]; c.move(); c.draw();
-                if (c.isBreaker) {
-                    for (let j = obstacles.length - 1; j >= 1; j--) {
-                        let r = obstacles[j];
-                        if (c.x > r.x && c.x < r.x + r.width && c.y > r.y && c.y < r.y + r.height) { obstacles.splice(j, 1); playSound(200, 'triangle', 0.05, 0.04); }
-                    }
-                }
-                let tdx = c.target.x - c.x, tdy = c.target.y - c.y, td = Math.sqrt(tdx*tdx + tdy*tdy);
-                if (td < c.target.radius + c.radius) { c.target.takeDamage(220); crows.splice(i, 1); playSound(150, 'sawtooth', 0.25, 0.12); }
-            }
-
-            b1.move(); b2.move(); checkBallCollision(b1, b2); b1.draw(); b2.draw(); 
-            requestAnimationFrame(gameLoop);
-        }
-
             });
             if (isAwake1 && b1.skillType === 'shrine') drawLunarGod(b1, b2);
             if (isAwake2 && b2.skillType === 'shrine') drawLunarGod(b2, b1);
@@ -274,5 +236,3 @@
     </script>
 </body>
 </html>
-
-
