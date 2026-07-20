@@ -1,15 +1,15 @@
+
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>雙球生存對決-下拉防卡版</title>
+    <title>雙球生存對決-終極覺醒版</title>
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
         body { margin: 0; background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         #selectionScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; background: #111; z-index: 10; position: absolute; padding: 20px; }
         .player-menu-box { width: 100%; max-width: 300px; background: #222; border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center; }
         .p1-box { border: 2px solid #ff4757; } .p2-box { border: 2px solid #2ed573; }
-        /* 呼叫系統內建選單，防攔截 */
         select { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; margin-top: 5px; }
         #startBtn { margin-top: 20px; width: 100%; max-width: 200px; padding: 14px; font-size: 18px; font-weight: bold; background: #f1c40f; border: none; border-radius: 25px; color: #000; }
         #gameScreen { display: none; flex-direction: column; align-items: center; width: 100vw; }
@@ -21,7 +21,6 @@
 <body>
     <div id="selectionScreen">
         <h3 style="color:#f1c40f; margin:0 0 10px 0;">⚔️ 請選取雙方技能 ⚔️</h3>
-        
         <div class="player-menu-box p1-box">
             <h4 style="color:#ff4757; margin:0 0 8px 0;">🔴 玩家 1 (紅球)</h4>
             <select id="p1Select">
@@ -32,7 +31,6 @@
                 <option value="shrine">🌸 祈禱 (陣內回血加速)</option>
             </select>
         </div>
-
         <div class="player-menu-box p2-box">
             <h4 style="color:#2ed573; margin:0 0 8px 0;">🟢 玩家 2 (綠球)</h4>
             <select id="p2Select">
@@ -43,10 +41,8 @@
                 <option value="shrine">🌸 祈禱 (陣內回血加速)</option>
             </select>
         </div>
-
         <button id="startBtn" onclick="startGame()">⚔️ 開始戰鬥 ⚔️</button>
     </div>
-
     <div id="gameScreen">
         <div id="scoreboard">
             <div style="color:#ff4757">紅球: <span id="hp1">2000</span> HP<div id="st1" style="font-size:10px;color:#aaa"></div></div>
@@ -54,7 +50,6 @@
         </div>
         <canvas id="gameCanvas" width="600" height="400"></canvas>
     </div>
-
     <div id="gameOverScreen">
         <h3 id="winnerText" style="color:#f1c40f;margin:0 0 15px 0;"></h3>
         <button onclick="backToSelection()" style="padding:10px 20px; font-weight:bold; border-radius:5px; border:none; background:#fff; color:#000;">返回選擇</button>
@@ -64,387 +59,185 @@
         const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
         const selectionScreen = document.getElementById("selectionScreen"), gameScreen = document.getElementById("gameScreen"), gameOverScreen = document.getElementById("gameOverScreen"), winnerText = document.getElementById("winnerText");
         const hp1Display = document.getElementById("hp1"), hp2Display = document.getElementById("hp2"), st1Display = document.getElementById("st1"), st2Display = document.getElementById("st2");
+        
         let gameActive = false, obstacles = [], crows = [], zones = [], timers = [];
+        let b1, b2, isAwake1 = false, isAwake2 = false, lunarTimer1 = null, lunarTimer2 = null;
         const centerBox = { x: 260, y: 160, width: 80, height: 80, color: "#f1c40f" };
 
+        let audioCtx = null, bgmInterval = null;
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        function playSound(freq, type, duration, vol) {
+            if (!audioCtx) return; try {
+                let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
+            } catch(e){}
+        }
+        function startBGM() {
+            if(bgmInterval) clearInterval(bgmInterval);
+            let notes = [261.63, 293.66, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66], step = 0;
+            bgmInterval = setInterval(() => {
+                if (!gameActive) return;
+                playSound(notes[step % notes.length], 'square', 0.15, 0.02);
+                if(step % 4 === 0) playSound(80, 'triangle', 0.12, 0.08);
+                step++;
+            }, 220);
+        }
+
         class Crow {
-            constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 3.5; }
+            constructor(x, y, t, c) { this.x = x; this.y = y; this.target = t; this.color = c; this.radius = 6; this.speed = 4; this.isBreaker = false; }
             move() { let dx = this.target.x - this.x, dy = this.target.y - this.y, d = Math.sqrt(dx*dx + dy*dy); if (d > 0) { this.x += (dx/d)*this.speed; this.y += (dy/d)*this.speed; } }
-            draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color === "#ff4757" ? "#ff7675" : "#55efc4"; ctx.fill(); ctx.closePath(); ctx.fillStyle = "#fff"; ctx.font = "10px sans-serif"; ctx.fillText("🦅", this.x - 6, this.y + 4); }
+            draw() {
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+                ctx.fillStyle = this.isBreaker ? "#f1c40f" : (this.color === "#ff4757" ? "#ff7675" : "#55efc4"); ctx.fill(); ctx.closePath();
+                ctx.fillStyle = "#fff"; ctx.font = "10px sans-serif"; ctx.fillText(this.isBreaker ? "👑" : "🦅", this.x - 6, this.y + 4);
+            }
         }
 
         class Ball {
-            constructor(x, y, c, n, h, st) { this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c; this.vx = c === "#ff4757" ? 5 : -5; this.vy = 4; this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy); this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.isInvincible = false; this.isInShrine = false; }
-            draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath(); if (this.isInvincible) { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); } }
-            move() { let currentSpeedMultiplier = this.isInShrine ? 1.5 : 1.0; this.x += this.vx * currentSpeedMultiplier * (this.isGiant ? 0.75 : 0.5); this.y += this.vy * currentSpeedMultiplier * (this.isGiant ? 0.75 : 0.5); if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; } else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; } if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; } else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; } }
-            takeDamage(a) { if (this.isInvincible) return; this.hp -= a; if (this.hp < 0) this.hp = 0; this.hpElement.innerText = this.hp; if (this.hp <= 0 && gameActive) endGame(this.name === "P1" ? "P2 獲勝！" : "P1 獲勝！"); }
+            constructor(x, y, c, n, h, st, skill) {
+                this.x = x; this.y = y; this.baseRadius = 15; this.radius = 15; this.color = c;
+                this.vx = c === "#ff4757" ? 7.5 : -7.5; this.vy = 5;
+                this.baseSpeedX = Math.abs(this.vx); this.baseSpeedY = Math.abs(this.vy);
+                this.hp = 2000; this.name = n; this.hpElement = h; this.statusElement = st; this.skillType = skill;
+                this.isInvincible = false; this.isInShrine = false; this.isGiant = false;
+            }
+            draw() {
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); ctx.closePath();
+                if (this.isInvincible) { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI*2); ctx.strokeStyle = "#00d2d3"; ctx.lineWidth = 3; ctx.stroke(); ctx.closePath(); }
+            }
+            move() {
+                let currentSpeedMultiplier = this.isInShrine ? 1.5 : 1.0;
+                this.x += this.vx * currentSpeedMultiplier; this.y += this.vy * currentSpeedMultiplier;
+                if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; playSound(349, 'triangle', 0.04, 0.03); } 
+                else if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; playSound(349, 'triangle', 0.04, 0.03); }
+                if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; playSound(349, 'triangle', 0.04, 0.03); } 
+                else if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; playSound(349, 'triangle', 0.04, 0.03); }
+            }
+            takeDamage(a) { if (this.isInvincible) return; this.hp -= a; if (this.hp < 0) this.hp = 0; this.hpElement.innerText = this.hp; if (this.hp <= 0 && gameActive) endGame(this.name === "P1" ? "玩家 2 獲獲勝！" : "玩家 1 獲勝！"); }
             heal(a) { this.hp += a; if (this.hp > 2000) this.hp = 2000; this.hpElement.innerText = this.hp; }
         }
-        let b1, b2;
 
         function setupSkill(b, e, s) {
-            if (s === 'shield') { b.statusElement.innerText = "🛡️ 冷卻中"; let t = setInterval(() => { if (!gameActive) return; b.isInvincible = true; b.statusElement.innerText = "✨ 無敵中!"; let it = setTimeout(() => { b.isInvincible = false; b.statusElement.innerText = "🛡️ 冷卻中"; }, 5000); timers.push(it); }, 10000); timers.push(t); } 
-            else if (s === 'giant') { b.statusElement.innerText = "💪 冷卻中"; let t = setInterval(() => { if (!gameActive) return; b.isGiant = true; b.radius = b.baseRadius * 2; b.vx = b.vx > 0 ? b.baseSpeedX * 1.5 : -b.baseSpeedX * 1.5; b.vy = b.vy > 0 ? b.baseSpeedY * 1.5 : -b.baseSpeedY * 1.5; b.statusElement.innerText = "⚡ 巨大化!"; let it = setTimeout(() => { b.isGiant = false; b.radius = b.baseRadius; b.vx = b.vx > 0 ? b.baseSpeedX : -b.baseSpeedX; b.vy = b.vy > 0 ? b.baseSpeedY : -b.baseSpeedY; b.statusElement.innerText = "💪 冷卻中"; }, 10000); timers.push(it); }, 15000); timers.push(t); } 
-            else if (s === 'crow') { b.statusElement.innerText = "🦅 召喚中"; let t = setInterval(() => { if (!gameActive) return; crows.push(new Crow(b.x, b.y, e, b.color)); }, 5000); timers.push(t); } 
-            else if (s === 'block') { b.statusElement.innerText = "🧱 製造中"; let t = setInterval(() => { if (!gameActive) return; let size = b.radius * 2; obstacles.push({ x: b.x - b.radius, y: b.y - b.radius, width: size, height: size, color: b.color === "#ff4757" ? "#b2bec3" : "#636e72" }); }, 5000); timers.push(t); }
-            else if (s === 'shrine') { b.statusElement.innerText = "🌸 祈禱冷卻中"; let t = setInterval(() => { if (!gameActive) return; let zX = Math.random() * (canvas.width - 160) + 80, zY = Math.random() * (canvas.height - 160) + 80; zones.push({ x: zX, y: zY, radius: 60, owner: b }); b.statusElement.innerText = "🌸 結界展開!"; let it = setTimeout(() => { zones = zones.filter(z => z.owner !== b); b.statusElement.innerText = "🌸 祈禱冷卻中"; }, 5000); timers.push(it); }, 10000); timers.push(t); }
+            if (s === 'shield') {
+                b.statusElement.innerText = "🛡️ 冷卻中";
+                let t = setInterval(() => { if (!gameActive) return; b.isInvincible = true; b.statusElement.innerText = "✨ 無敵中!"; playSound(880, 'sine', 0.3, 0.05); let it = setTimeout(() => { b.isInvincible = false; b.statusElement.innerText = "🛡️ 冷卻中"; }, 5000); timers.push(it); }, 10000); timers.push(t);
+            } 
+            else if (s === 'giant') {
+                b.statusElement.innerText = "💪 冷卻中";
+                let t = setInterval(() => {
+                    if (!gameActive) return; b.isGiant = true;
+                    let mult = (b.hp <= 1000) ? 4 : 2, speedMult = (b.hp <= 1000) ? 3 : 1.5;
+                    b.radius = b.baseRadius * mult; b.vx = b.vx > 0 ? b.baseSpeedX * speedMult : -b.baseSpeedX * speedMult; b.vy = b.vy > 0 ? b.baseSpeedY * speedMult : -b.baseSpeedY * speedMult;
+                    b.statusElement.innerText = (b.hp <= 1000) ? "👹 滅世巨大化！" : "⚡ 巨大化!"; playSound(220, 'sawtooth', 0.4, 0.04);
+                    let it = setTimeout(() => { b.isGiant = false; b.radius = b.baseRadius; b.vx = b.vx > 0 ? b.baseSpeedX : -b.baseSpeedX; b.vy = b.vy > 0 ? b.baseSpeedY : -b.baseSpeedY; b.statusElement.innerText = "💪 冷卻中"; }, 10000); timers.push(it);
+                }, 15000); timers.push(t);
+            } 
+            else if (s === 'crow') {
+                b.statusElement.innerText = "🦅 召喚中 (10s)";
+                let t = setInterval(() => {
+                    if (!gameActive) return; let c = new Crow(b.x, b.y, e, b.color);
+                    if (b.hp <= 1000) { c.isBreaker = true; c.speed = 5; } crows.push(c);
+                }, 10000); timers.push(t);
+            } 
+            else if (s === 'block') {
+                b.statusElement.innerText = "🧱 製造中";
+                let t = setInterval(() => {
+                    if (!gameActive) return; let size = b.radius * 2;
+                    obstacles.push({ x: b.x - b.radius, y: b.y - b.radius, width: size, height: size, color: b.color === "#ff4757" ? "#b2bec3" : "#636e72" });
+                    playSound(440, 'triangle', 0.1, 0.03); if (obstacles.length > 6) { obstacles.splice(1, 1); }
+                }, 5000); timers.push(t);
+            }
+            else if (s === 'shrine') {
+                b.statusElement.innerText = "🌸 祈禱冷卻中";
+                let t = setInterval(() => {
+                    if (!gameActive) return; let zX = Math.random() * (canvas.width - 240) + 120, zY = Math.random() * (canvas.height - 240) + 120;
+                    zones.push({ x: zX, y: zY, radius: 90, owner: b }); b.statusElement.innerText = "🌸 結界展開!";
+                    let it = setTimeout(() => { zones = zones.filter(z => z.owner !== b); b.statusElement.innerText = "🌸 祈禱冷卻中"; }, 5000); timers.push(it);
+                }, 10000); timers.push(t);
+            }
+        }
+
+        function triggerAwakeInstant(b, e) {
+            playSound(120, 'sawtooth', 0.5, 0.15);
+            if (b.skillType === 'block') {
+                let count = obstacles.length - 1;
+                if (count > 0) { e.takeDamage(count * 150); obstacles = [centerBox]; playSound(100, 'sawtooth', 0.5, 0.2); }
+            }
+            if (b.skillType === 'shrine') {
+                let timer = setInterval(() => { if (!gameActive) return; e.takeDamage(70); b.heal(30); playSound(700, 'sine', 0.05, 0.02); }, 1000);
+                timers.push(timer); if(b.name === "P1") lunarTimer1 = timer; else lunarTimer2 = timer;
+            }
+        }
+
+        function drawLunarGod(b, e) {
+            ctx.save(); ctx.beginPath(); ctx.arc(canvas.width/2, canvas.height/2, 25, 0, Math.PI * 2); ctx.fillStyle = "rgba(155, 89, 182, 0.3)"; ctx.fill(); ctx.strokeStyle = "#9b59b6"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
+            ctx.fillStyle = "#fff"; ctx.font = "14px sans-serif"; ctx.fillText("🌙", canvas.width/2 - 7, canvas.height/2 + 5);
+            ctx.beginPath(); ctx.moveTo(canvas.width/2, canvas.height/2); ctx.lineTo(e.x, e.y); ctx.strokeStyle = "rgba(231, 76, 60, 0.4)"; ctx.lineWidth = 3; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(canvas.width/2, canvas.height/2); ctx.lineTo(b.x, b.y); ctx.strokeStyle = "rgba(46, 204, 113, 0.4)"; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
         }
 
         function startGame() {
-            const s1 = document.getElementById("p1Select").value; const s2 = document.getElementById("p2Select").value;
-            selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true;
-            b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display); b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display);
+            initAudio(); if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            const s1 = document.getElementById("p1Select").value, s2 = document.getElementById("p2Select").value;
+            selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true; isAwake1 = false; isAwake2 = false; lunarTimer1 = null; lunarTimer2 = null;
+            b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display, s1); b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display, s2);
             hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; zones = []; timers = [];
-            setupSkill(b1, b2, s1); setupSkill(b2, b1, s2); gameLoop();
+            setupSkill(b1, b2, s1); setupSkill(b2, b1, s2); startBGM(); gameLoop();
         }
 
-        function checkBallRectCollision(b, r) { let cx = Math.max(r.x, Math.min(b.x, r.x + r.width)), cy = Math.max(r.y, Math.min(b.y, r.y + r.height)), dx = b.x - cx, dy = b.y - cy, dSq = (dx*dx)+(dy*dy); if (dSq < (b.radius*b.radius)) { let d = Math.sqrt(dSq); if (d === 0) return; b.x += (dx/d)*(b.radius-d); b.y += (dy/d)*(b.radius-d); if (Math.abs(dx/d) > Math.abs(dy/d)) { b.vx = -b.vx; } else { b.vy = -b.vy; } } }
-        function checkBallCollision(ball1, ball2) { let dx = ball2.x - ball1.x, dy = ball2.y - ball1.y, d = Math.sqrt(dx*dx + dy*dy), minDist = ball1.radius + ball2.radius; if (d < minDist) { let dmg1 = Math.floor(Math.random()*151)+150, dmg2 = Math.floor(Math.random()*151)+150; ball1.takeDamage(dmg1); ball2.takeDamage(dmg2); let nx = dx/d, ny = dy/d, o = minDist - d; ball1.x -= nx*(o/2); ball1.y -= ny*(o/2); ball2.x += nx*(o/2); ball2.y += ny*(o/2); let kx = ball1.vx - ball2.vx, ky = ball1.vy - ball2.vy, p = nx*kx + ny*ky; if (p > 0) { ball1.vx -= p*nx; ball1.vy -= p*ny; ball2.vx += p*nx; ball2.vy += p*ny; } } }
-        function gameLoop() { if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height); b1.isInShrine = false; b2.isInShrine = false; zones.forEach(z => { ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.fillStyle = "rgba(255, 121, 121, 0.15)"; ctx.fill(); ctx.strokeStyle = "rgba(255, 159, 243, 0.6)"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath(); ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.font = "12px sans-serif"; ctx.fillText("🌸", z.x - 6, z.y + 5); let zdx = z.owner.x - z.x, zdy = z.owner.y - z.y, zdist = Math.sqrt(zdx*zdx + zdy*zdy); if (zdist < z.radius) { z.owner.isInShrine = true; z.owner.heal(3); } }); obstacles.forEach(r => { ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.width, r.height); checkBallRectCollision(b1, r); checkBallRectCollision(b2, r); }); for (let i = crows.length - 1; i >= 0; i--) { let c = crows[i]; c.move(); c.draw(); let tdx = c.target.x - c.x, tdy = c.target.y - c.y, td = Math.sqrt(tdx*tdx + tdy*tdy); if (td < c.target.radius + c.radius) { c.target.takeDamage(220); crows.splice(i, 1); } } b1.move(); b2.move(); checkBallCollision(b1, b2); b1.draw(); b2.draw(); requestAnimationFrame(gameLoop); }
-        function endGame(m) { gameActive = false; timers.forEach(t => { clearInterval(t); clearTimeout(t); }); winnerText.innerText = m; gameOverScreen.style.display = "block"; }
+        function checkBallRectCollision(b, r) {
+            let closestX = Math.max(r.x, Math.min(b.x, r.x + r.width)), closestY = Math.max(r.y, Math.min(b.y, r.y + r.height)), dx = b.x - closestX, dy = b.y - closestY, dSq = (dx*dx)+(dy*dy);
+            if (dSq < (b.radius*b.radius)) {
+                let d = Math.sqrt(dSq); if (d === 0) return; b.x += (dx/d)*(b.radius-d); b.y += (dy/d)*(b.radius-d);
+                if (Math.abs(dx/d) > Math.abs(dy/d)) { b.vx = -b.vx; } else { b.vy = -b.vy; } playSound(300, 'triangle', 0.05, 0.05);
+            }
+        }
+
+        function checkBallCollision(ball1, ball2) {
+            let dx = ball2.x - ball1.x, dy = ball2.y - ball1.y, d = Math.sqrt(dx*dx + dy*dy), minDist = ball1.radius + ball2.radius;
+            if (d < minDist) {
+                let dmg1 = Math.floor(Math.random()*151)+150, dmg2 = Math.floor(Math.random()*151)+150;
+                if (ball1.isInvincible && ball1.skillType === 'shield' && ball1.hp <= 1000) { ball2.takeDamage(dmg1); dmg1 = 0; }
+                if (ball2.isInvincible && ball2.skillType === 'shield' && ball2.hp <= 1000) { ball1.takeDamage(dmg2); dmg2 = 0; }
+                ball1.takeDamage(dmg1); ball2.takeDamage(dmg2);
+                let nx = dx/d, ny = dy/d, o = minDist - d; ball1.x -= nx*(o/2); ball1.y -= ny*(o/2); ball2.x += nx*(o/2); ball2.y += ny*(o/2);
+                let kx = ball1.vx - ball2.vx, ky = ball1.vy - ball2.vy, p = nx*kx + ny*ky; if (p > 0) { ball1.vx -= p*nx; ball1.vy -= p*ny; ball2.vx += p*nx; ball2.vy += p*ny; }
+                playSound(600, 'square', 0.15, 0.08);
+            }
+        }
+
+        function gameLoop() {
+            if (!gameActive) return; ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (b1.hp <= 1000 && !isAwake1) { isAwake1 = true; b1.statusElement.innerText = "🔥 殘血覺醒！"; triggerAwakeInstant(b1, b2); }
+            if (b2.hp <= 1000 && !isAwake2) { isAwake2 = true; b2.statusElement.innerText = "🔥 殘血覺醒！"; triggerAwakeInstant(b2, b1); }
+            b1.isInShrine = false; b2.isInShrine = false;
+            zones.forEach(z => {
+                ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2); ctx.fillStyle = "rgba(255, 121, 121, 0.15)"; ctx.fill(); ctx.strokeStyle = "rgba(255, 159, 243, 0.6)"; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
+                ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.font = "12px sans-serif"; ctx.fillText("🌸", z.x - 6, z.y + 5);
+                let zdx = z.owner.x - z.x, zdy = z.owner.y - z.y, zdist = Math.sqrt(zdx*zdx + zdy*zdy); if (zdist < z.radius) { z.owner.isInShrine = true; z.owner.heal(4); if (Math.random() < 0.1) playSound(1000, 'sine', 0.02, 0.02); }
+            });
+            if (isAwake1 && b1.skillType === 'shrine') drawLunarGod(b1, b2);
+            if (isAwake2 && b2.skillType === 'shrine') drawLunarGod(b2, b1);
+            obstacles.forEach(r => { ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.width, r.height); checkBallRectCollision(b1, r); checkBallRectCollision(b2, r); });
+            for (let i = crows.length - 1; i >= 0; i--) {
+                let c = crows[i]; c.move(); c.draw();
+                if (c.isBreaker) {
+                    for (let j = obstacles.length - 1; j >= 1; j--) {
+                        let r = obstacles[j];
+                        if (c.x > r.x && c.x < r.x + r.width && c.y > r.y && c.y < r.y + r.height) { obstacles.splice(j, 1); playSound(200, 'triangle', 0.05, 0.04); }
+                    }
+                }
+                let tdx = c.target.x - c.x, tdy = c.target.y - c.y, td = Math.sqrt(tdx*tdx + tdy*tdy);
+                if (td < c.target.radius + c.radius) { c.target.takeDamage(220); crows.splice(i, 1); playSound(150, 'sawtooth', 0.25, 0.12); }
+            }
+            b1.move(); b2.move(); checkBallCollision(b1, b2); b1.draw(); b2.draw(); requestAnimationFrame(gameLoop);
+        }
+        function endGame(m) { gameActive = false; clearInterval(bgmInterval); if(lunarTimer1) clearInterval(lunarTimer1); if(lunarTimer2) clearInterval(lunarTimer2); timers.forEach(t => { clearInterval(t); clearTimeout(t); }); winnerText.innerText = m; gameOverScreen.style.display = "block"; playSound(100, 'sawtooth', 0.6, 0.2); }
         function backToSelection() { gameOverScreen.style.display = "none"; gameScreen.style.display = "none"; selectionScreen.style.display = "flex"; }
     </script>
 </body>
 </html>
 
-
-<!-- ========================================== -->
-<!-- 以下為音樂音效補丁引擎：直接加在最下面即可 -->
-<!-- ========================================== -->
-<script>
-    // 🎵 Web Audio API 復古合成音效引擎
-    let audioCtx = null, bgmInterval = null;
-    
-    function initAudio() { 
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); 
-    }
-    
-    function playSound(freq, type, duration, vol) {
-        if (!audioCtx) return; 
-        try {
-            let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-            osc.type = type; 
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            gain.gain.setValueAtTime(vol, audioCtx.currentTime); 
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-            osc.connect(gain); 
-            gain.connect(audioCtx.destination); 
-            osc.start(); 
-            osc.stop(audioCtx.currentTime + duration);
-        } catch(e){}
-    }
-    
-    // 循環播放 8-bit 電子背景音樂
-    function startBGM() {
-        if (bgmInterval) clearInterval(bgmInterval);
-        let notes = [261.63, 293.66, 329.63, 349.23, 392.00, 349.23, 329.63, 293.66]; // 基礎音階
-        let step = 0;
-        bgmInterval = setInterval(() => {
-            if (!gameActive) return;
-            // 播放旋律
-            playSound(notes[step % notes.length], 'square', 0.15, 0.02);
-            // 每4拍加一個重低音
-            if(step % 4 === 0) playSound(80, 'triangle', 0.12, 0.08); 
-            step++;
-        }, 220);
-    }
-
-    // 覆寫並強植注入原本的 startGame 與 endGame 函數，確保音效啟動
-    const originalStartGame = window.startGame;
-    window.startGame = function() {
-        initAudio(); 
-        if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
-        // 先執行原本的開始邏輯
-        if (typeof originalStartGame === 'function') {
-            originalStartGame();
-        } else {
-            // 如果原本的沒跑，強制手動啟動
-            const s1 = document.getElementById("p1Select").value; 
-            const s2 = document.getElementById("p2Select").value;
-            selectionScreen.style.display = "none"; gameScreen.style.display = "flex"; gameOverScreen.style.display = "none"; gameActive = true;
-            b1 = new Ball(100, 100, "#ff4757", "P1", hp1Display, st1Display); 
-            b2 = new Ball(500, 300, "#2ed573", "P2", hp2Display, st2Display);
-            hp1Display.innerText = 2000; hp2Display.innerText = 2000; obstacles = [centerBox]; crows = []; zones = []; timers = [];
-            setupSkill(b1, b2, s1); setupSkill(b2, b1, s2); gameLoop();
-        }
-        startBGM(); // 啟動背景音樂
-    };
-
-    const originalEndGame = window.endGame;
-    window.endGame = function(m) {
-        clearInterval(bgmInterval);
-        playSound(150, 'sawtooth', 0.6, 0.15); // 播放失敗/結束音效
-        if (typeof originalEndGame === 'function') {
-            originalEndGame(m);
-        } else {
-            gameActive = false;
-            timers.forEach(t => { clearInterval(t); clearTimeout(t); });
-            winnerText.innerText = m; gameOverScreen.style.display = "block";
-        }
-    };
-
-    // 重新注入技能與碰撞音效
-    const originalSetupSkill = window.setupSkill;
-    window.setupSkill = function(b, e, s) {
-        if (typeof originalSetupSkill === 'function') originalSetupSkill(b, e, s);
-        // 每當技能觸發時，多加一段聲音
-        if (s === 'shield') { let t = setInterval(() => { if (gameActive) playSound(880, 'sine', 0.3, 0.05); }, 10000); timers.push(t); }
-        else if (s === 'giant') { let t = setInterval(() => { if (gameActive) playSound(220, 'sawtooth', 0.4, 0.04); }, 15000); timers.push(t); }
-        else if (s === 'block') { let t = setInterval(() => { if (gameActive) playSound(440, 'triangle', 0.1, 0.03); }, 5000); timers.push(t); }
-    };
-
-    // 每格監聽特殊碰撞並發出聲音
-    let lastB1Hp = 2000, lastB2Hp = 2000;
-    let oldGameLoop = window.gameLoop;
-    window.gameLoop = function() {
-        if (!gameActive) return;
-        if (typeof oldGameLoop === 'function') oldGameLoop();
-        
-        // 偵測血量變化來播放受傷/碰撞/補血音效
-        if (window.b1 && window.b2) {
-            if (b1.hp < lastB1Hp) { playSound(587.33, 'square', 0.1, 0.05); } // P1受傷/被烏鴉炸
-            if (b2.hp < lastB2Hp) { playSound(587.33, 'square', 0.1, 0.05); } // P2受傷/被烏鴉炸
-            if (b1.isInShrine && Math.random() < 0.1) { playSound(987.77, 'sine', 0.03, 0.02); } // 巫女補血綠光音效
-            if (b2.isInShrine && Math.random() < 0.1) { playSound(987.77, 'sine', 0.03, 0.02); }
-            lastB1Hp = b1.hp; lastB2Hp = b2.hp;
-        }
-        
-        // 簡單的牆壁反彈音效偵測
-        if (window.b1 && (b1.x <= b1.radius+5 || b1.x >= canvas.width-b1.radius-5 || b1.y <= b1.radius+5 || b1.y >= canvas.height-b1.radius-5)) {
-            playSound(349.23, 'triangle', 0.04, 0.03);
-        }
-        if (window.b2 && (b2.x <= b2.radius+5 || b2.x >= canvas.width-b2.radius-5 || b2.y <= b2.radius+5 || b2.y >= canvas.height-b2.radius-5)) {
-            playSound(349.23, 'triangle', 0.04, 0.03);
-        }
-    };
-</script>
-
-<!-- ========================================== -->
-<!-- 🩸 覺醒被動與數值平衡補丁：直接加在最下面 🩸 -->
-<!-- ========================================== -->
-<script>
-    // 1. 調整全場基礎數值（增強全體速度、限制方塊上限、增強巫女結界）
-    setTimeout(() => {
-        if(window.b1 && window.b2) {
-            // 全角色速度大幅增強
-            b1.baseSpeedX = 7.5; b1.baseSpeedY = 6;
-            b2.baseSpeedX = 7.5; b2.baseSpeedY = 6;
-        }
-    }, 100);
-
-    // 2. 擴充功能與重置邏輯
-    let isAwake1 = false, isAwake2 = false;
-    let lunarTimer1 = null, lunarTimer2 = null;
-
-    // 覆寫原本的開始遊戲，初始化狀態
-    const prevStartGame = window.startGame;
-    window.startGame = function() {
-        isAwake1 = false; isAwake2 = false;
-        if(lunarTimer1) clearInterval(lunarTimer1);
-        if(lunarTimer2) clearInterval(lunarTimer2);
-        if (typeof prevStartGame === 'function') prevStartGame();
-        
-        // 強制修改全體技能時間與上限
-        setTimeout(() => {
-            // 增強全角色初始飛行速度
-            b1.vx = b1.vx > 0 ? 7.5 : -7.5; b1.vy = 5;
-            b2.vx = b2.vx > 0 ? 7.5 : -7.5; b2.vy = 5;
-            b1.baseSpeedX = 7.5; b1.baseSpeedY = 5;
-            b2.baseSpeedX = 7.5; b2.baseSpeedY = 5;
-        }, 50);
-    };
-
-    // 攔截原本的技能設定，修改烏鴉為10秒，並攔截障礙物限制5個
-    const prevSetupSkill = window.setupSkill;
-    window.setupSkill = function(b, e, s) {
-        // 清除剛才可能建立的舊定時器
-        if (s === 'crow') {
-            b.statusElement.innerText = "🦅 召喚中 (10s)";
-            let t = setInterval(() => { 
-                if (!gameActive) return; 
-                // 1000血以下觸發覺醒烏鴉(金色、破壞障礙)
-                if (b.hp <= 1000) {
-                    let c = new Crow(b.x, b.y, e, "#f1c40f");
-                    c.isBreaker = true; // 標記為破壞型烏鴉
-                    crows.push(c);
-                } else {
-                    crows.push(new Crow(b.x, b.y, e, b.color)); 
-                }
-            }, 10000); // ⚡ 烏鴉改為 10 秒
-            timers.push(t);
-        } 
-        else if (s === 'block') {
-            b.statusElement.innerText = "🧱 製造中 (5s)";
-            let t = setInterval(() => { 
-                if (!gameActive) return; 
-                let size = b.radius * 2;
-                obstacles.push({ x: b.x - b.radius, y: b.y - b.radius, width: size, height: size, color: b.color === "#ff4757" ? "#b2bec3" : "#636e72" }); 
-                
-                // ⚡ 障礙物放置上限為 5 個 (保留第0個中心黃色正方形不刪)
-                if (obstacles.length > 6) {
-                    obstacles.splice(1, 1); // 刪除最舊的玩家方塊
-                }
-            }, 5000);
-            timers.push(t);
-        }
-        else if (s === 'shrine') {
-            b.statusElement.innerText = "🌸 祈禱冷卻中";
-            let t = setInterval(() => { 
-                if (!gameActive) return; 
-                let zX = Math.random() * (canvas.width - 200) + 100, zY = Math.random() * (canvas.height - 200) + 100; 
-                // ⚡ 巫女櫻花陣半徑擴大為 1.5 倍 (60 -> 90)
-                zones.push({ x: zX, y: zY, radius: 90, owner: b }); 
-                b.statusElement.innerText = "🌸 櫻花結界展開!"; 
-                let it = setTimeout(() => { zones = zones.filter(z => z.owner !== b); b.statusElement.innerText = "🌸 祈禱冷卻中"; }, 5000); 
-                timers.push(it); 
-            }, 10000); 
-            timers.push(t);
-        }
-        else {
-            if (typeof prevSetupSkill === 'function') prevSetupSkill(b, e, s);
-        }
-    };
-
-    // 核心重寫：每格畫面更新時注入 1000血以下的覺醒技能邏輯
-    let originalGameLoop2 = window.gameLoop;
-    window.gameLoop = function() {
-        if (!gameActive) return;
-        if (typeof originalGameLoop2 === 'function') originalGameLoop2();
-
-        if (window.b1 && window.b2) {
-            // ---- 🔴 玩家 1 (紅球) 1000血以下覺醒被動 ----
-            if (b1.hp <= 1000 && !isAwake1) {
-                isAwake1 = true;
-                b1.statusElement.innerText = "🔥 殘血覺醒！！";
-                triggerAwakening(b1, b2, 1);
-            }
-            // ---- 🟢 玩家 2 (綠球) 1000血以下覺醒被動 ----
-            if (b2.hp <= 1000 && !isAwake2) {
-                isAwake2 = true;
-                b2.statusElement.innerText = "🔥 殘血覺醒！！";
-                triggerAwakening(b2, b1, 2);
-            }
-
-            // 護盾覺醒：反彈碰撞傷害 (如果自己開無敵且是護盾流，在takeDamage會處理，這裡處理碰撞反轉)
-            if (b1.isInvincible && b1.skillType === 'shield' && b1.hp <= 1000) {
-                // 如果護盾覺醒被撞，把原本會受到的傷害迴向給P2 (在checkBallCollision中會模擬)
-            }
-
-            // 巫女覺醒：月神降臨繪製與效果
-            if (isAwake1 && b1.skillType === 'shrine') drawLunarGod(b1, b2);
-            if (isAwake2 && b2.skillType === 'shrine') drawLunarGod(b2, b1);
-        }
-
-        // 破壞烏鴉檢測 (吞噬灰色障礙物)
-        for (let i = crows.length - 1; i >= 0; i--) {
-            let c = crows[i];
-            if (c.isBreaker) {
-                // 檢查是否撞到任何灰色方塊
-                for (let j = obstacles.length - 1; j >= 1; j--) { // 從1開始，不刪除0號中心方塊
-                    let r = obstacles[j];
-                    if (c.x > r.x && c.x < r.x + r.width && c.y > r.y && c.y < r.y + r.height) {
-                        obstacles.splice(j, 1); // 💥 烏鴉直接破壞障礙物
-                        if(typeof playSound === 'function') playSound(200, 'triangle', 0.1, 0.05);
-                    }
-                }
-            }
-        }
-    };
-
-    // 處理 1000血以下觸發的一瞬間被動
-    function triggerAwakening(self, enemy, pNum) {
-        if(typeof playSound === 'function') playSound(120, 'sawtooth', 0.5, 0.2);
-
-        // 1. 巨大流覺醒：速度與大小再變 2 倍
-        if (self.skillType === 'giant') {
-            self.radius = self.baseRadius * 4; // 2倍再2倍 = 4倍大
-            self.vx *= 2; self.vy *= 2; // 速度再加倍
-            self.statusElement.innerText = "👹 滅世巨球！！";
-        }
-        
-        // 2. 障礙物流覺醒：現存所有障礙物爆炸轟擊敵人
-        if (self.skillType === 'block') {
-            self.statusElement.innerText = "💥 障礙物連環大爆炸！";
-            let count = obstacles.length - 1; // 不算中心點
-            if (count > 0) {
-                // 每個方塊炸敵人 120 點傷害
-                enemy.takeDamage(count * 120);
-                // 清空玩家放的障礙物
-                obstacles = [centerBox];
-                if(typeof playSound === 'function') playSound(100, 'sawtooth', 0.5, 0.2);
-            }
-        }
-
-        // 3. 巫女流覺醒：啟動月神計時器，全屏抽血
-        if (self.skillType === 'shrine') {
-            let timer = setInterval(() => {
-                if (!gameActive) return;
-                // 每秒對全場對手造成 70 點大量傷害
-                enemy.takeDamage(70);
-                // 對巫女造成 30 點回復
-                self.heal(30);
-                if(typeof playSound === 'function') playSound(700, 'sine', 0.1, 0.03);
-            }, 1000);
-            timers.push(timer);
-            if(pNum === 1) lunarTimer1 = timer; else lunarTimer2 = timer;
-        }
-    }
-
-    // 繪製月神的華麗射線視覺特效
-    function drawLunarGod(sub, target) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(canvas.width/2, canvas.height/2, 25, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(155, 89, 182, 0.3)";
-        ctx.fill();
-        ctx.strokeStyle = "#9b59b6";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.closePath();
-        ctx.fillStyle = "#fff"; ctx.font = "14px sans-serif"; ctx.fillText("🌙", canvas.width/2 - 7, canvas.height/2 + 5);
-
-        // 畫出抽血連線
-        ctx.beginPath();
-        ctx.moveTo(canvas.width/2, canvas.height/2);
-        ctx.lineTo(target.x, target.y);
-        ctx.strokeStyle = "rgba(231, 76, 60, 0.4)";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(canvas.width/2, canvas.height/2);
-        ctx.lineTo(sub.x, sub.y);
-        ctx.strokeStyle = "rgba(46, 204, 113, 0.4)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // 護盾覺醒：被動反彈 100% 傷害注入
-    let oldCheckBallCollision = window.checkBallCollision;
-    window.checkBallCollision = function(ball1, ball2) {
-        let dx = ball2.x - ball1.x, dy = ball2.y - ball1.y, d = Math.sqrt(dx*dx + dy*dy);
-        if (d < ball1.radius + ball2.radius) {
-            // 模擬碰撞時的護盾反射
-            let generatedDmg = Math.floor(Math.random()*151)+150;
-            if (ball1.isInvincible && ball1.skillType === 'shield' && ball1.hp <= 1000) {
-                ball2.takeDamage(generatedDmg); // 100%反彈給敵人
-            }
-            if (ball2.isInvincible && ball2.skillType === 'shield' && ball2.hp <= 1000) {
-                ball1.takeDamage(generatedDmg); // 100%反彈給敵人
-            }
-        }
-        if (typeof oldCheckBallCollision === 'function') oldCheckBallCollision(ball1, ball2);
-    };
-
-    // 清除月神計時器
-    let oldEndGame = window.endGame;
-    window.endGame = function(m) {
-        if(lunarTimer1) clearInterval(lunarTimer1);
-        if(lunarTimer2) clearInterval(lunarTimer2);
-        if(typeof oldEndGame === 'function') oldEndGame(m);
-    };
-</script>
 
