@@ -220,3 +220,231 @@
         }
     };
 </script>
+
+<!-- ========================================== -->
+<!-- 🩸 覺醒被動與數值平衡補丁：直接加在最下面 🩸 -->
+<!-- ========================================== -->
+<script>
+    // 1. 調整全場基礎數值（增強全體速度、限制方塊上限、增強巫女結界）
+    setTimeout(() => {
+        if(window.b1 && window.b2) {
+            // 全角色速度大幅增強
+            b1.baseSpeedX = 7.5; b1.baseSpeedY = 6;
+            b2.baseSpeedX = 7.5; b2.baseSpeedY = 6;
+        }
+    }, 100);
+
+    // 2. 擴充功能與重置邏輯
+    let isAwake1 = false, isAwake2 = false;
+    let lunarTimer1 = null, lunarTimer2 = null;
+
+    // 覆寫原本的開始遊戲，初始化狀態
+    const prevStartGame = window.startGame;
+    window.startGame = function() {
+        isAwake1 = false; isAwake2 = false;
+        if(lunarTimer1) clearInterval(lunarTimer1);
+        if(lunarTimer2) clearInterval(lunarTimer2);
+        if (typeof prevStartGame === 'function') prevStartGame();
+        
+        // 強制修改全體技能時間與上限
+        setTimeout(() => {
+            // 增強全角色初始飛行速度
+            b1.vx = b1.vx > 0 ? 7.5 : -7.5; b1.vy = 5;
+            b2.vx = b2.vx > 0 ? 7.5 : -7.5; b2.vy = 5;
+            b1.baseSpeedX = 7.5; b1.baseSpeedY = 5;
+            b2.baseSpeedX = 7.5; b2.baseSpeedY = 5;
+        }, 50);
+    };
+
+    // 攔截原本的技能設定，修改烏鴉為10秒，並攔截障礙物限制5個
+    const prevSetupSkill = window.setupSkill;
+    window.setupSkill = function(b, e, s) {
+        // 清除剛才可能建立的舊定時器
+        if (s === 'crow') {
+            b.statusElement.innerText = "🦅 召喚中 (10s)";
+            let t = setInterval(() => { 
+                if (!gameActive) return; 
+                // 1000血以下觸發覺醒烏鴉(金色、破壞障礙)
+                if (b.hp <= 1000) {
+                    let c = new Crow(b.x, b.y, e, "#f1c40f");
+                    c.isBreaker = true; // 標記為破壞型烏鴉
+                    crows.push(c);
+                } else {
+                    crows.push(new Crow(b.x, b.y, e, b.color)); 
+                }
+            }, 10000); // ⚡ 烏鴉改為 10 秒
+            timers.push(t);
+        } 
+        else if (s === 'block') {
+            b.statusElement.innerText = "🧱 製造中 (5s)";
+            let t = setInterval(() => { 
+                if (!gameActive) return; 
+                let size = b.radius * 2;
+                obstacles.push({ x: b.x - b.radius, y: b.y - b.radius, width: size, height: size, color: b.color === "#ff4757" ? "#b2bec3" : "#636e72" }); 
+                
+                // ⚡ 障礙物放置上限為 5 個 (保留第0個中心黃色正方形不刪)
+                if (obstacles.length > 6) {
+                    obstacles.splice(1, 1); // 刪除最舊的玩家方塊
+                }
+            }, 5000);
+            timers.push(t);
+        }
+        else if (s === 'shrine') {
+            b.statusElement.innerText = "🌸 祈禱冷卻中";
+            let t = setInterval(() => { 
+                if (!gameActive) return; 
+                let zX = Math.random() * (canvas.width - 200) + 100, zY = Math.random() * (canvas.height - 200) + 100; 
+                // ⚡ 巫女櫻花陣半徑擴大為 1.5 倍 (60 -> 90)
+                zones.push({ x: zX, y: zY, radius: 90, owner: b }); 
+                b.statusElement.innerText = "🌸 櫻花結界展開!"; 
+                let it = setTimeout(() => { zones = zones.filter(z => z.owner !== b); b.statusElement.innerText = "🌸 祈禱冷卻中"; }, 5000); 
+                timers.push(it); 
+            }, 10000); 
+            timers.push(t);
+        }
+        else {
+            if (typeof prevSetupSkill === 'function') prevSetupSkill(b, e, s);
+        }
+    };
+
+    // 核心重寫：每格畫面更新時注入 1000血以下的覺醒技能邏輯
+    let originalGameLoop2 = window.gameLoop;
+    window.gameLoop = function() {
+        if (!gameActive) return;
+        if (typeof originalGameLoop2 === 'function') originalGameLoop2();
+
+        if (window.b1 && window.b2) {
+            // ---- 🔴 玩家 1 (紅球) 1000血以下覺醒被動 ----
+            if (b1.hp <= 1000 && !isAwake1) {
+                isAwake1 = true;
+                b1.statusElement.innerText = "🔥 殘血覺醒！！";
+                triggerAwakening(b1, b2, 1);
+            }
+            // ---- 🟢 玩家 2 (綠球) 1000血以下覺醒被動 ----
+            if (b2.hp <= 1000 && !isAwake2) {
+                isAwake2 = true;
+                b2.statusElement.innerText = "🔥 殘血覺醒！！";
+                triggerAwakening(b2, b1, 2);
+            }
+
+            // 護盾覺醒：反彈碰撞傷害 (如果自己開無敵且是護盾流，在takeDamage會處理，這裡處理碰撞反轉)
+            if (b1.isInvincible && b1.skillType === 'shield' && b1.hp <= 1000) {
+                // 如果護盾覺醒被撞，把原本會受到的傷害迴向給P2 (在checkBallCollision中會模擬)
+            }
+
+            // 巫女覺醒：月神降臨繪製與效果
+            if (isAwake1 && b1.skillType === 'shrine') drawLunarGod(b1, b2);
+            if (isAwake2 && b2.skillType === 'shrine') drawLunarGod(b2, b1);
+        }
+
+        // 破壞烏鴉檢測 (吞噬灰色障礙物)
+        for (let i = crows.length - 1; i >= 0; i--) {
+            let c = crows[i];
+            if (c.isBreaker) {
+                // 檢查是否撞到任何灰色方塊
+                for (let j = obstacles.length - 1; j >= 1; j--) { // 從1開始，不刪除0號中心方塊
+                    let r = obstacles[j];
+                    if (c.x > r.x && c.x < r.x + r.width && c.y > r.y && c.y < r.y + r.height) {
+                        obstacles.splice(j, 1); // 💥 烏鴉直接破壞障礙物
+                        if(typeof playSound === 'function') playSound(200, 'triangle', 0.1, 0.05);
+                    }
+                }
+            }
+        }
+    };
+
+    // 處理 1000血以下觸發的一瞬間被動
+    function triggerAwakening(self, enemy, pNum) {
+        if(typeof playSound === 'function') playSound(120, 'sawtooth', 0.5, 0.2);
+
+        // 1. 巨大流覺醒：速度與大小再變 2 倍
+        if (self.skillType === 'giant') {
+            self.radius = self.baseRadius * 4; // 2倍再2倍 = 4倍大
+            self.vx *= 2; self.vy *= 2; // 速度再加倍
+            self.statusElement.innerText = "👹 滅世巨球！！";
+        }
+        
+        // 2. 障礙物流覺醒：現存所有障礙物爆炸轟擊敵人
+        if (self.skillType === 'block') {
+            self.statusElement.innerText = "💥 障礙物連環大爆炸！";
+            let count = obstacles.length - 1; // 不算中心點
+            if (count > 0) {
+                // 每個方塊炸敵人 120 點傷害
+                enemy.takeDamage(count * 120);
+                // 清空玩家放的障礙物
+                obstacles = [centerBox];
+                if(typeof playSound === 'function') playSound(100, 'sawtooth', 0.5, 0.2);
+            }
+        }
+
+        // 3. 巫女流覺醒：啟動月神計時器，全屏抽血
+        if (self.skillType === 'shrine') {
+            let timer = setInterval(() => {
+                if (!gameActive) return;
+                // 每秒對全場對手造成 70 點大量傷害
+                enemy.takeDamage(70);
+                // 對巫女造成 30 點回復
+                self.heal(30);
+                if(typeof playSound === 'function') playSound(700, 'sine', 0.1, 0.03);
+            }, 1000);
+            timers.push(timer);
+            if(pNum === 1) lunarTimer1 = timer; else lunarTimer2 = timer;
+        }
+    }
+
+    // 繪製月神的華麗射線視覺特效
+    function drawLunarGod(sub, target) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(canvas.width/2, canvas.height/2, 25, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(155, 89, 182, 0.3)";
+        ctx.fill();
+        ctx.strokeStyle = "#9b59b6";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.closePath();
+        ctx.fillStyle = "#fff"; ctx.font = "14px sans-serif"; ctx.fillText("🌙", canvas.width/2 - 7, canvas.height/2 + 5);
+
+        // 畫出抽血連線
+        ctx.beginPath();
+        ctx.moveTo(canvas.width/2, canvas.height/2);
+        ctx.lineTo(target.x, target.y);
+        ctx.strokeStyle = "rgba(231, 76, 60, 0.4)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(canvas.width/2, canvas.height/2);
+        ctx.lineTo(sub.x, sub.y);
+        ctx.strokeStyle = "rgba(46, 204, 113, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // 護盾覺醒：被動反彈 100% 傷害注入
+    let oldCheckBallCollision = window.checkBallCollision;
+    window.checkBallCollision = function(ball1, ball2) {
+        let dx = ball2.x - ball1.x, dy = ball2.y - ball1.y, d = Math.sqrt(dx*dx + dy*dy);
+        if (d < ball1.radius + ball2.radius) {
+            // 模擬碰撞時的護盾反射
+            let generatedDmg = Math.floor(Math.random()*151)+150;
+            if (ball1.isInvincible && ball1.skillType === 'shield' && ball1.hp <= 1000) {
+                ball2.takeDamage(generatedDmg); // 100%反彈給敵人
+            }
+            if (ball2.isInvincible && ball2.skillType === 'shield' && ball2.hp <= 1000) {
+                ball1.takeDamage(generatedDmg); // 100%反彈給敵人
+            }
+        }
+        if (typeof oldCheckBallCollision === 'function') oldCheckBallCollision(ball1, ball2);
+    };
+
+    // 清除月神計時器
+    let oldEndGame = window.endGame;
+    window.endGame = function(m) {
+        if(lunarTimer1) clearInterval(lunarTimer1);
+        if(lunarTimer2) clearInterval(lunarTimer2);
+        if(typeof oldEndGame === 'function') oldEndGame(m);
+    };
+</script>
+
