@@ -1,3 +1,575 @@
-<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>物理生死鬥</title><style>body{background:#121214;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0}.panel{background:#1e1e24;padding:15px 25px;border-radius:12px;display:flex;gap:20px;align-items:center;margin-bottom:20px;border:1px solid #333}select,button{background:#2a2a32;color:#fff;border:1px solid #555;padding:8px 12px;border-radius:6px;font-size:16px;cursor:pointer}#startBtn{background:linear-gradient(135deg,#00ffcc,#00bfff);color:#121214;font-weight:bold;border:none;padding:10px 25px}.hud{display:flex;justify-content:space-between;width:800px;margin-bottom:5px;font-weight:bold}.hp-box{width:45%;background:#333;height:16px;border-radius:8px;overflow:hidden;border:1px solid #555}.hp-bar{height:100%;width:100%}#p1Bar{background:#ff4a4a}#p2Bar{background:#4a90e2}#container {position:relative;background:#18181c;border-radius:10px;border:2px solid #333}#msg{position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:24px;font-weight:bold;text-shadow:0 0 8px #000;pointer-events:none;z-index:10}</style></head><body><h1>《殘血反殺！全自動物理亂彈生死鬥》</h1><div id="panel" class="panel"><div style="color:#ff4a4a;font-weight:bold">P1 紅方: <select id="p1Select"><option value="ninja">🥷 忍者</option><option value="giant">🧱 巨大</option><option value="maiden">⛩️ 巫女</option><option value="blocker">🚧 障礙物</option><option value="crow">🪶 烏鴉</option><option value="invincible">🛡️ 無敵</option></select></div><button id="startBtn">START BATTLE</button><div style="color:#4a90e2;font-weight:bold">P2 藍方: <select id="p2Select"><option value="giant">🧱 巨大</option><option value="ninja">🥷 忍者</option><option value="maiden">⛩️ 巫女</option><option value="blocker">🚧 障礙物</option><option value="crow">🪶 烏鴉</option><option value="invincible">🛡️ 無敵</option></select></div></div><div class="hud"><div style="color:#ff4a4a">P1 HP: <span id="p1Txt">5000</span></div><div style="color:#4a90e2">P2 HP: <span id="p2Txt">5000</span></div></div><div class="hud" style="margin-top:-5px;margin-bottom:15px"><div class="hp-box"><div id="p1Bar" class="hp-bar"></div></div><div class="hp-box"><div id="p2Bar" class="hp-bar"></div></div></div><div id="container"><div id="msg"></div><canvas id="ctx" width="800" height="500"></canvas></div><script>
-const canvas=document.getElementById('ctx'),ctx=canvas.getContext('2d'),startBtn=document.getElementById('startBtn'),p1Select=document.getElementById('p1Select'),p2Select=document.getElementById('p2Select'),msg=document.getElementById('msg'),panel=document.getElementById('panel');ctx.fillStyle='#18181c';ctx.fillRect(0,0,800,500);let gameActive=false,p1=null,p2=null,projectiles=[],obstacles=[],zones=[],ninjaClone=null;function createBall(id,x,y,color,type){let a=(id===1)?(Math.random()*0.6-0.3):(Math.random()*0.6+Math.PI-0.3);return{id:id,x:x,y:y,radius:25,color:color,type:type,hp:5000,mass:1,tick:0,isAwake:false,isInv:false,invTime:0,isClone:false,vx:Math.cos(a)*6,vy:Math.sin(a)*6}}function updateBall(b){if(b.hp<=1000&&!b.isAwake){b.isAwake=true;msg.innerText=(b.id===1?'紅方':'藍方')+' 殘血覺醒！';msg.style.color=b.color;setTimeout(()=>{msg.innerText=''},2000);if(b.type==='blocker'){let enemy=(b.id===1)?p2:p1;obstacles.forEach(o=>{if(Math.hypot(enemy.x-(o.x+15),enemy.y-(o.y+15))<150){enemy.hp=Math.max(0,enemy.hp-400);let a=Math.atan2(enemy.y-(o.y+15),enemy.x-(o.x+15));enemy.vx+=Math.cos(a)*10;enemy.vy+=Math.sin(a)*10}});obstacles=[]}if(b.type==='ninja'&&!b.isClone){ninjaClone=createBall(b.id,b.x,b.y,'#555555','ninja');ninjaClone.isClone=true;ninjaClone.hp=b.hp;ninjaClone.vx=-b.vx;ninjaClone.vy=-b.vy;setTimeout(()=>{ninjaClone=null},10000)}}if(b.isInv){b.invTime--;if(b.invTime<=0)b.isInv=false}b.tick++;if(b.type==='crow'&&b.tick%100===0){let enemy=(b.id===1)?p2:p1;if(!b.isAwake){projectiles.push({type:'crow',x:b.x,y:b.y,vx:0,vy:0,r:8,color:'#9b59b6',owner:b,dmg:150,track:true})}else{let a=Math.atan2(b.vy,b.vx);projectiles.push({type:'gcrow',x:b.x,y:b.y,vx:Math.cos(a)*9,vy:Math.sin(a)*9,r:25,color:'#4a148c',owner:b,dmg:450,track:false})}}if(b.type==='ninja'&&b.tick%120===0){let enemy=(b.id===1)?p2:p1;let a=Math.atan2(enemy.y-b.y,enemy.x-b.x);for(let i=0;i<3;i++)projectiles.push({type:'kunai',x:b.x,y:b.y,vx:Math.cos(a+(i-1)*0.25)*8,vy:Math.sin(a+(i-1)*0.25)*8,r:5,color:'#e74c3c',owner:b,dmg:100})}if(b.type==='blocker'&&b.tick%140===0&&!b.isAwake){obstacles.push({x:b.x-b.vx*3,y:b.y-b.vy*3,size:30});if(obstacles.length>5)obstacles.shift()}if(b.type==='invincible'&&b.tick%220===0){b.isInv=true;b.invTime=120}if(b.type==='maiden'&&b.tick%180===0){zones.push({type:b.isAwake?'lunar':'shrine',x:Math.random()*500+150,y:Math.random()*300+100,r:b.isAwake?110:70,owner:b,duration:240})}b.x+=b.vx;b.y+=b.vy;if(b.x-b.radius<0){b.x=b.radius;b.vx*=-1;bounceBall(b)}else if(b.x+b.radius>canvas.width){b.x=canvas.width-b.radius;b.vx*=-1;bounceBall(b)}if(b.y-b.radius<0){b.y=b.radius;b.vy*=-1;bounceBall(b)}else if(b.y+b.radius>canvas.height){b.y=canvas.height-b.radius;b.vy*=-1;bounceBall(b)}}
-function bounceBall(b){if(b.type==='giant'){let max=b.isAwake?2.5:1.6;if(b.radius<25*max){b.radius+=0.6;b.mass+=0.05;b.vx*=1.02;b.vy*=1.02}}}function damageBall(b,amt,atk){if(b.isInv){if(b.isAwake&&atk&&atk!==b)damageBall(atk,amt,b);return}b.hp=Math.max(0,b.hp-amt)}function drawBall(b){ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();ctx.closePath();if(b.isInv){ctx.beginPath();ctx.arc(b.x,b.y,b.radius+8,0,Math.PI*2);ctx.strokeStyle='#f1c40f';ctx.lineWidth=3;ctx.stroke();ctx.closePath()}}function collideBalls(b1,b2){let d=Math.hypot(b2.x-b1.x,b2.y-b1.y);if(d<b1.radius+b2.radius){let ov=(b1.radius+b2.radius)-d,nx=(b2.x-b1.x)/d,ny=(b2.y-b1.y)/d;b1.x-=nx*ov*0.5;b1.y-=ny*ov*0.5;b2.x+=nx*ov*0.5;b2.y+=ny*ov*0.5;let kx=b1.vx-b2.vx,ky=b1.vy-b2.vy,p=2*(nx*kx+ny*ky)/(b1.mass+b2.mass);b1.vx-=p*b2.mass*nx;b1.vy-=p*b2.mass*ny;b2.vx+=p*b1.mass*nx;b2.vy+=p*b1.mass*ny;let spd=Math.hypot(kx,ky);damageBall(b1,Math.round(25*b2.mass*(spd/6)),b2);damageBall(b2,Math.round(25*b1.mass*(spd/6)),b1)}}function collideObs(b){obstacles.forEach(o=>{let cx=Math.max(o.x,Math.min(b.x,o.x+o.size)),cy=Math.max(o.y,Math.min(b.y,o.y+o.size)),dx=b.x-cx,dy=b.y-cy,dist=Math.hypot(dx,dy);if(dist<b.radius){if(Math.abs(dx)>Math.abs(dy)){b.vx*=-1;b.x=dx>0?cx+b.radius:cx-b.radius}else{b.vy*=-1;b.y=dy>0?cy+b.radius:cy-b.radius}bounceBall(b)}})}function loop(){if(!gameActive)return;ctx.fillStyle='#18181c';ctx.fillRect(0,0,canvas.width,canvas.height);zones.forEach((z,idx)=>{z.duration--;if(z.duration<=0){zones.splice(idx,1);return}ctx.beginPath();ctx.arc(z.x,z.y,z.r,0,Math.PI*2);ctx.fillStyle=(z.type==='lunar')?'rgba(155,89,182,0.15)':'rgba(46,204,113,0.15)';ctx.fill();ctx.closePath();[p1,p2,ninjaClone].forEach(b=>{if(!b)return;if(b.type==='maiden'&&b===z.owner){if(Math.hypot(b.x-z.x,b.y-z.y)<z.r)b.hp=Math.min(5000,b.hp+(z.type==='lunar'?7:4));if(z.type==='lunar'){ctx.beginPath();ctx.moveTo(z.x,z.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle='#ffffff';ctx.stroke()}}if(z.type==='lunar'&&b!==z.owner&&Math.hypot(b.x-z.x,b.y-z.y)<z.r)damageBall(b,2,z.owner)})});obstacles.forEach(o=>{ctx.fillStyle='#7f8c8d';ctx.fillRect(o.x,o.y,o.size,o.size)});updateBall(p1);updateBall(p2);if(ninjaClone){updateBall(ninjaClone);drawBall(ninjaClone);collideBalls(ninjaClone,p2);collideObs(ninjaClone)}collideBalls(p1,p2);collideObs(p1);collideObs(p2);drawBall(p1);drawBall(p2);projectiles.forEach((p,idx)=>{let enemy=(p.owner.id===1)?p2:p1;if(p.track){let a=Math.atan2(enemy.y-p.y,enemy.x-p.x);p.vx=Math.cos(a)*4.5;p.vy=Math.sin(a)*4.5}p.x+=p.vx;p.y+=p.vy;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.color;ctx.fill();ctx.closePath();if(p.type==='kunai'){if(p.x<0||p.x>canvas.width)p.vx*=-1;if(p.y<0||p.y>canvas.height)p.vy*=-1;obstacles.forEach(o=>{if(p.x>o.x&&p.x<o.x+o.size&&p.y>o.y&&p.y<o.y+o.size)p.vy*=-1})}if(p.type==='gcrow'){obstacles.forEach((o,oIdx)=>{if(Math.hypot(p.x-(o.x+15),p.y-(o.y+15))<p.r+15)obstacles.splice(oIdx,1)})}let tgts=p.owner.isClone?[p1,p2].filter(b=>b.id!==p.owner.id):[enemy];tgts.forEach(t=>{if(Math.hypot(p.x-t.x,p.y-t.y)<p.r+t.radius){damageBall(t,p.dmg,p.owner);projectiles.splice(idx,1)}});if(p.type!=='kunai'&&(p.x<-40||p.x>canvas.width+40||p.y<-40||p.y>canvas.height+40))projectiles.splice(idx,1)});document.getElementById('p1Txt').innerText=p1.hp;document.getElementById('p2Txt').innerText=p2.hp;document.getElementById('p1Bar').style.width=(p1.hp/5000*100)+'%';document.getElementById('p2Bar').style.width=(p2.hp/5000*100)+'%';if(b1.hp<=0||b2.hp<=0) {/*修正這裡可能產生的變數混淆直接使用全域物件*/}; if(p1.hp<=0||p2.hp<=0){gameActive=false;ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.font='bold 35px sans-serif';ctx.textAlign='center';ctx.fillStyle='#ffffff';ctx.fillText((p1.hp<=0&&p2.hp<=0)?'雙方同歸於盡，平手！':(p1.hp<=0?'藍方 (P2) 獲得勝利！':'紅方 (P1) 獲得勝利！'),canvas.width/2,canvas.height/2);setTimeout(()=>{ctx.fillStyle='#18181c';ctx.fillRect(0,0,canvas.width,canvas.height);panel.style.opacity='1';panel.style.pointerEvents='auto'},3000);return}requestAnimationFrame(loop)}startBtn.addEventListener('click',()=>{projectiles=[];obstacles=[];zones=[];ninjaClone=null;msg.innerText='';panel.style.opacity='0';panel.style.pointerEvents='none';p1=createBall(1,150,250,'#ff4a4a',p1Select.value);p2=createBall(2,650,250,'#4a90e2',p2Select.value);gameActive=true;loop()});</script></body></html>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>物理隨機碰撞大亂鬥</title>
+    <style>
+        body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: sans-serif; }
+        #control { margin-bottom: 10px; display: flex; gap: 10px; }
+        select, button { padding: 8px 16px; background: #333; color: #fff; border: 1px solid #555; cursor: pointer; border-radius: 4px; font-size: 14px; }
+        select:hover, button:hover { background: #444; }
+        canvas { border: 4px solid #333; background: #0a0a0a; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        #status { font-size: 20px; font-weight: bold; margin-bottom: 10px; min-height: 28px; }
+    </style>
+</head>
+<body>
+
+    <div id="status">請選擇角色並點擊開始戰鬥！</div>
+    <div id="control">
+        <label>玩家 1 (紅): 
+            <select id="p1Select">
+                <option value="crow">烏鴉</option>
+                <option value="shield">護盾</option>
+                <option value="giant">巨大</option>
+                <option value="obstacle">障礙物</option>
+                <option value="shaman">巫女</option>
+                <option value="ninja">忍者</option>
+                <option value="spider">蜘蛛</option>
+            </select>
+        </label>
+        <label>玩家 2 (藍): 
+            <select id="p2Select" value="shield">
+                <option value="crow">烏鴉</option>
+                <option value="shield" selected>護盾</option>
+                <option value="giant">巨大</option>
+                <option value="obstacle">障礙物</option>
+                <option value="shaman">巫女</option>
+                <option value="ninja">忍者</option>
+                <option value="spider">蜘蛛</option>
+            </select>
+        </label>
+        <button id="startBtn">開始戰鬥</button>
+    </div>
+    <canvas id="gameCanvas" width="900" height="550"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// 全域遊戲管理
+let gameRunning = false;
+let p1 = null;
+let p2 = null;
+let projectiles = []; // 烏鴉、苦無、蜘蛛絲
+let obstacles = [];   // 障礙物
+let zones = [];       // 巫女區域
+let particles = [];   // 特效粒子
+
+const BASE_SPEED = 6; // 全體速度增強
+
+// 工具函數
+function distance(x1, y1, x2, y2) {
+    return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+}
+
+// 基礎角色類別
+class Character {
+    constructor(x, y, color, side, type) {
+        this.x = x;
+        this.y = y;
+        this.baseRadius = 22;
+        this.radius = this.baseRadius;
+        this.color = color;
+        this.side = side; // "p1" 或 "p2"
+        this.type = type;
+        
+        this.hp = 100;
+        this.maxHp = 100;
+        this.atk = 8;
+        this.flash = 0;
+
+        // 隨機初始速度向量
+        let angle = Math.random() * Math.PI * 2;
+        this.vx = Math.cos(angle) * BASE_SPEED;
+        this.vy = Math.sin(angle) * BASE_SPEED;
+
+        // 狀態與冷卻
+        this.timers = {};
+        this.states = { isShielded: false, isGiant: false, halfHpTriggered: false, isSlowed: false };
+        this.storedDamage = 0; // 護盾反彈用
+    }
+
+    get mass() { return this.radius; }
+    get speedMultiplier() { 
+        let mult = 1;
+        if (this.states.isGiant) mult *= (this.states.halfHpTriggered ? 2.0 : 1.3);
+        if (this.states.isSlowed) mult *= 0.4; // 蜘蛛網緩速
+        return mult;
+    }
+
+    takeDamage(amount) {
+        if (this.hp <= 0) return;
+        if (this.states.isShielded) {
+            if (this.states.halfHpTriggered) {
+                this.storedDamage += amount; // 記錄抵銷傷害準備給予敵人
+            }
+            return;
+        }
+        this.hp -= amount;
+        this.flash = 10;
+        if (this.hp < 0) this.hp = 0;
+    }
+
+    update(enemy) {
+        if (this.hp <= 0) return;
+
+        // 檢查半血爆發
+        if (this.hp <= 50 && !this.states.halfHpTriggered) {
+            this.states.halfHpTriggered = true;
+            this.triggerHalfHpSkill(enemy);
+        }
+
+        // 常規速度物理移動
+        let currentMaxSpeed = BASE_SPEED * this.speedMultiplier;
+        let speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        if (speed > 0) {
+            this.vx = (this.vx / speed) * currentMaxSpeed;
+            this.vy = (this.vy / speed) * currentMaxSpeed;
+        }
+        
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // 邊界碰撞
+        if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; }
+        if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; }
+        if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; }
+        if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; }
+
+        // 計時器更新
+        for (let key in this.timers) {
+            if (this.timers[key] > 0) this.timers[key]--;
+        }
+
+        // 執行主動技能循環
+        this.executeSkills(enemy);
+    }
+
+    executeSkills(enemy) {
+        // 依據不同角色覆寫
+    }
+
+    triggerHalfHpSkill(enemy) {
+        // 依據不同角色覆寫
+    }
+
+    draw() {
+        if (this.hp <= 0) return;
+
+        // 繪製護盾外圈
+        if (this.states.isShielded) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
+            ctx.strokeStyle = this.states.halfHpTriggered ? '#ff00ff' : '#00ffff';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+
+        // 繪製主體
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.flash > 0 && Math.floor(this.flash / 2) % 2 === 0 ? '#fff' : this.color;
+        ctx.fill();
+        ctx.closePath();
+        if (this.flash > 0) this.flash--;
+
+        // 血條
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(this.x - 25, this.y - this.radius - 15, 50, 6);
+        ctx.fillStyle = this.side === 'p1' ? '#ff4757' : '#1e90ff';
+        ctx.fillRect(this.x - 25, this.y - this.radius - 15, 50 * (this.hp / this.maxHp), 6);
+        
+        // 名字/類別標籤
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.type.toUpperCase(), this.x, this.y + 4);
+    }
+}
+
+// ================= 角色子類別實作 =================
+
+// 1. 烏鴉
+class CrowChar extends Character {
+    executeSkills(enemy) {
+        if (!this.timers.crowSkill) this.timers.crowSkill = 600; // 10秒冷卻 (60fps * 10)
+        if (this.timers.crowSkill === 1) {
+            projectiles.push({ type: 'crow', x: this.x, y: this.y, vx: 0, vy: 0, speed: 4, target: enemy, side: this.side, special: false });
+            this.timers.crowSkill = 600;
+        }
+    }
+    triggerHalfHpSkill(enemy) {
+        // 生成一隻可以破壞障礙物的特殊烏鴉
+        projectiles.push({ type: 'crow', x: this.x, y: this.y, vx: 0, vy: 0, speed: 5, target: enemy, side: this.side, special: true });
+    }
+}
+
+// 2. 護盾
+class ShieldChar extends Character {
+    executeSkills(enemy) {
+        if (!this.timers.shieldLoop) this.timers.shieldLoop = 600; // 10秒大循環
+        
+        let progress = 600 - this.timers.shieldLoop;
+        if (progress < 300) { // 前5秒開啟 (300幀)
+            this.states.isShielded = true;
+        } else {
+            this.states.isShielded = false;
+            // 如果半血覺醒，在護盾結束時將抵銷的所有傷害回饋給對手
+            if (this.states.halfHpTriggered && this.storedDamage > 0) {
+                enemy.takeDamage(this.storedDamage);
+                createExplosion(enemy.x, enemy.y, '#ff00ff', 15);
+                this.storedDamage = 0;
+            }
+        }
+        if (this.timers.shieldLoop === 1) this.timers.shieldLoop = 600;
+    }
+}
+
+// 3. 巨大
+class GiantChar extends Character {
+    executeSkills(enemy) {
+        if (!this.timers.giantLoop) this.timers.giantLoop = 600;
+        let progress = 600 - this.timers.giantLoop;
+        
+        let sizeMult = this.states.halfHpTriggered ? 2.0 : 1.5; // 半血變2倍大小，正常1.5倍
+        if (progress < 300) { // 持續5秒
+            this.states.isGiant = true;
+            this.radius = this.baseRadius * sizeMult;
+        } else {
+            this.states.isGiant = false;
+            this.radius = this.baseRadius;
+        }
+        if (this.timers.giantLoop === 1) this.timers.giantLoop = 600;
+    }
+}
+
+// 4. 障礙物
+class ObstacleChar extends Character {
+    executeSkills(enemy) {
+        if (!this.timers.obsSkill) this.timers.obsSkill = 300; // 每5秒
+        if (this.timers.obsSkill === 1) {
+            if (obstacles.length >= 5) obstacles.shift(); // 限制上限5個
+            obstacles.push({ x: this.x + (Math.random()-0.5)*40, y: this.y + (Math.random()-0.5)*40, radius: 15, owner: this.side });
+            this.timers.obsSkill = 300;
+        }
+    }
+    triggerHalfHpSkill(enemy) {
+        // 所有自己的障礙物爆炸
+        obstacles.forEach(obs => {
+            if (obs.owner === this.side) {
+                createExplosion(obs.x, obs.y, '#e67e22', 20);
+                let d = distance(obs.x, obs.y, enemy.x, enemy.y);
+                if (d < enemy.radius + 60) enemy.takeDamage(20); // 爆炸傷害
+            }
+        });
+        obstacles = obstacles.filter(obs => obs.owner !== this.side); // 清空自己的
+    }
+}
+
+// 5. 巫女
+class ShamanChar extends Character {
+    executeSkills(enemy) {
+        if (!this.timers.zoneSkill) this.timers.zoneSkill = 300; // 每5秒
+        if (this.timers.zoneSkill === 1) {
+            zones.push({ x: this.x, y: this.y, radius: 85, duration: 240, owner: this.side }); // 範圍調大至 85
+            this.timers.zoneSkill = 300;
+        }
+
+        // 檢查是否處在自己的法陣中
+        let inside = false;
+        zones.forEach(z => {
+            if (z.owner === this.side && distance(this.x, this.y, z.x, z.y) < z.radius) {
+                inside = true;
+            }
+        });
+        if (inside) {
+            if (this.hp < this.maxHp) this.hp += 0.05; // 每幀微量回血
+            this.vx *= 1.05; this.vy *= 1.05; // 加速效果
+        }
+    }
+    triggerHalfHpSkill(enemy) {
+        // 召喚月神：對全場造成大量傷害，自身少量治療
+        enemy.takeDamage(35);
+        this.hp = Math.min(this.maxHp, this.hp + 15);
+        createExplosion(canvas.width/2, canvas.height/2, '#9b59b6', 60);
+    }
+
+}
+// 6. 忍者
+class NinjaChar extends Character {
+constructor(x, y, color, side, type) {
+super(x, y, color, side, type);
+this.kunaiCount = 0;
+this.clone = null;
+}
+executeSkills(enemy) {
+if (!this.timers.kunaiSkill) this.timers.kunaiSkill = 1200; // 20秒
+if (this.timers.kunaiSkill === 1) {
+this.fireKunai(enemy);
+this.timers.kunaiSkill = 1200;
+}
+if (this.clone) {
+this.clone.update(enemy);
+if (this.clone.lifetime > 0) this.clone.lifetime--;
+else this.clone = null;
+}
+}
+fireKunai(enemy) {
+let activeKunais = projectiles.filter(p => p.type === 'kunai' && p.side === this.side).length;
+if (activeKunais < 3) {
+let angle = Math.random() * Math.PI * 2;
+projectiles.push({
+type: 'kunai', x: this.x, y: this.y,
+vx: Math.cos(angle) * 8, vy: Math.sin(angle) * 8,
+radius: 6, side: this.side, dmg: 10
+});
+}
+}
+triggerHalfHpSkill(enemy) {
+// 召喚分身，分身存活90秒 (5400幀)
+this.clone = {
+x: this.x - 30, y: this.y - 30, radius: this.radius,
+vx: -this.vx, vy: -this.vy, lifetime: 5400,
+update: (en) => {
+this.clone.x += this.clone.vx; this.clone.y += this.clone.vy;
+// 分身碰到牆壁反彈
+if (this.clone.x < 15 || this.clone.x > canvas.width-15) this.clone.vx *= -1;
+if (this.clone.y < 15 || this.clone.y > canvas.height-15) this.clone.vy *= -1;
+// 分身發射3個苦無
+if (Math.random() < 0.005) {
+projectiles.push({ type: 'kunai', x: this.clone.x, y: this.clone.y, vx: (Math.random()-0.5)*12, vy: (Math.random()-0.5)12, radius: 6, side: this.side, dmg: 8 });
+}
+},
+draw: () => {
+ctx.beginPath(); ctx.arc(this.clone.x, this.clone.y, this.clone.radius, 0, Math.PI2);
+ctx.fillStyle = 'rgba(46, 204, 113, 0.5)'; ctx.fill();
+}
+};
+}
+draw() {
+super.draw();
+if (this.clone) this.clone.draw();
+}
+}
+// 7. 蜘蛛
+class SpiderChar extends Character {
+executeSkills(enemy) {
+if (!this.timers.webSkill) this.timers.webSkill = 300; // 每5秒
+if (this.timers.webSkill === 1) {
+// 隨機選一面牆發射蛛絲
+let walls = [
+{x: 0, y: this.y}, {x: canvas.width, y: this.y},
+{x: this.x, y: 0}, {x: this.x, y: canvas.height}
+];
+let targetWall = walls[Math.floor(Math.random() * walls.length)];
+projectiles.push({
+type: 'web_line', x: this.x, y: this.y, tx: targetWall.x, ty: targetWall.y,
+progress: 0, state: 'extend', owner: this
+});
+this.timers.webSkill = 300;
+}
+}
+triggerHalfHpSkill(enemy) {
+// 全場蜘蛛網：敵人緩速，自己不受影響
+enemy.states.isSlowed = true;
+// 創造全場網狀背景特效
+createExplosion(canvas.width/2, canvas.height/2, '#ffffff', 40);
+}
+}
+// ================= 粒子特效系統 =================
+function createExplosion(x, y, color, count) {
+for (let i = 0; i < count; i++) {
+let angle = Math.random() * Math.PI * 2;
+let spd = Math.random() * 4 + 2;
+particles.push({ x: x, y: y, vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd, color: color, life: 30 });
+}
+}
+// ================= 碰撞核心物理運算 =================
+function handleCollisions() {
+if (p1.hp <= 0 || p2.hp <= 0) return;
+// 1. 角色間的碰撞
+let dx = p2.x - p1.x;
+let dy = p2.y - p1.y;
+let dist = Math.sqrt(dxdx + dydy);
+let minDist = p1.radius + p2.radius;
+if (dist < minDist) {
+p1.takeDamage(p2.atk);
+p2.takeDamage(p1.atk);
+createExplosion((p1.x+p2.x)/2, (p1.y+p2.y)/2, '#fff', 8);
+// 防止重疊
+let overlap = minDist - dist;
+let nx = dx / dist; let ny = dy / dist;
+p1.x -= nx * overlap * 0.5; p1.y -= ny * overlap * 0.5;
+p2.x += nx * overlap * 0.5; p2.y += ny * overlap * 0.5;
+// 2D 彈性碰撞公式
+let kx = p1.vx - p2.vx; let ky = p1.vy - p2.vy;
+let p = 2 * (nx * kx + ny * ky) / (p1.mass + p2.mass);
+p1.vx -= p * p2.mass * nx; p1.vy -= p * p2.mass * ny;
+p2.vx += p * p1.mass * nx; p2.vy += p * p1.mass * ny;
+}
+// 2. 角色與障礙物的碰撞
+[p1, p2].forEach(p => {
+obstacles.forEach((obs, index) => {
+let odx = obs.x - p.x; let ody = obs.y - p.y;
+let odist = Math.sqrt(odxodx + odyody);
+let oMinDist = p.radius + obs.radius;
+if (odist < oMinDist) {
+// 彈開角色
+let onx = odx / odist; let ony = ody / odist;
+p.x -= onx * (oMinDist - odist);
+p.vx = -p.vx * 0.8; p.vy = -p.vy * 0.8;
+}
+});
+});
+}
+// ================= 投射物與環境更新 =================
+function updateEntities() {
+// 更新區域 (巫女陣)
+zones.forEach(z => z.duration--);
+zones = zones.filter(z => z.duration > 0);
+// 更新特效粒子
+particles.forEach(pt => { pt.x += pt.vx; pt.y += pt.vy; pt.life--; });
+particles = particles.filter(pt => pt.life > 0);
+// 更新投射物
+projectiles.forEach((p, idx) => {
+let enemy = (p.side === 'p1') ? p2 : p1;
+if (p.type === 'crow') {
+// 追蹤邏輯
+let cdx = p.target.x - p.x; let cdy = p.target.y - p.y;
+let cdist = Math.sqrt(cdxcdx + cdycdy);
+p.vx = (cdx / cdist) * p.speed; p.vy = (cdy / cdist) * p.speed;
+p.x += p.vx; p.y += p.vy;
+// 撞擊對手
+if (cdist < p.target.radius + 10) {
+p.target.takeDamage(12);
+projectiles.splice(idx, 1);
+return;
+}
+// 半血特異烏鴉：可消除撞到的障礙物
+if (p.special) {
+obstacles.forEach((obs, oIdx) => {
+if (distance(p.x, p.y, obs.x, obs.y) < obs.radius + 15) {
+obstacles.splice(oIdx, 1);
+createExplosion(obs.x, obs.y, '#555', 5);
+}
+});
+}
+}
+else if (p.type === 'kunai') {
+p.x += p.vx; p.y += p.vy;
+// 牆壁隨機彈射
+if (p.x < 0 || p.x > canvas.width) p.vx = -1;
+if (p.y < 0 || p.y > canvas.height) p.vy = -1;
+// 撞擊判定
+if (distance(p.x, p.y, enemy.x, enemy.y) < enemy.radius + 5) {
+enemy.takeDamage(p.dmg);
+projectiles.splice(idx, 1);
+}
+}
+else if (p.type === 'web_line') {
+if (p.state === 'extend') {
+p.progress += 0.08;
+if (p.progress >= 1) p.state = 'pull';
+} else if (p.state === 'pull') {
+// 將蜘蛛拉向目標點並加速
+let curX = p.owner.x; let curY = p.owner.y;
+let tdx = p.tx - curX; let tdy = p.ty - curY;
+let tdist = Math.sqrt(tdxtdx + tdytdy);
+if (tdist > 20) {
+p.owner.vx = (tdx / tdist) * (BASE_SPEED * 2.2);
+p.owner.vy = (tdy / tdist) * (BASE_SPEED * 2.2);
+} else {
+projectiles.splice(idx, 1);
+}
+}
+}
+});
+}
+// ================= 繪製畫面 =================
+function drawEverything() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+// 1. 畫巫女區域
+zones.forEach(z => {
+ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
+ctx.fillStyle = z.owner === 'p1' ? 'rgba(231, 76, 60, 0.15)' : 'rgba(52, 152, 219, 0.15)';
+ctx.fill();
+ctx.strokeStyle = z.owner === 'p1' ? 'rgba(231, 76, 60, 0.4)' : 'rgba(52, 152, 219, 0.4)';
+ctx.stroke();
+});
+// 2. 畫障礙物
+obstacles.forEach(obs => {
+ctx.beginPath(); ctx.arc(obs.x, obs.y, obs.radius, 0, Math.PI * 2);
+ctx.fillStyle = '#7f8c8d'; ctx.fill();
+ctx.lineWidth = 2; ctx.strokeStyle = '#bdc3c7'; ctx.stroke();
+});
+// 3. 畫投射物
+projectiles.forEach(p => {
+ctx.beginPath();
+if (p.type === 'crow') {
+ctx.arc(p.x, p.y, p.special ? 10 : 6, 0, Math.PI * 2);
+ctx.fillStyle = p.special ? '#e74c3c' : '#34495e';
+ctx.fill();
+} else if (p.type === 'kunai') {
+ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+ctx.fillStyle = '#f1c40f'; ctx.fill();
+} else if (p.type === 'web_line') {
+let endX = p.x + (p.tx - p.x) * p.progress;
+let endY = p.y + (p.ty - p.y) * p.progress;
+ctx.moveTo(p.owner.x, p.owner.y); ctx.lineTo(endX, endY);
+ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+}
+});
+// 4. 畫粒子
+particles.forEach(pt => {
+ctx.beginPath(); ctx.arc(pt.x, pt.y, 2, 0, Math.PI*2);
+ctx.fillStyle = pt.color; ctx.fill();
+});
+// 5. 畫角色
+p1.draw();
+p2.draw();
+}
+// ================= 遊戲主迴圈 =================
+function gameLoop() {
+if (!gameRunning) return;
+p1.update(p2);
+p2.update(p1);
+handleCollisions();
+updateEntities();
+drawEverything();
+// 判斷勝負
+const statusText = document.getElementById('status');
+if (p1.hp <= 0 && p2.hp <= 0) {
+statusText.innerText = "💥 兩敗俱傷！平手！"; gameRunning = false;
+} else if (p1.hp <= 0) {
+statusText.innerText = "🔵 藍方獲勝！"; gameRunning = false;
+} else if (p2.hp <= 0) {
+statusText.innerText = "🔴 紅方獲勝！"; gameRunning = false;
+}
+if (gameRunning) requestAnimationFrame(gameLoop);
+}
+// ================= 初始化工廠 =================
+function createCharacter(type, x, y, color, side) {
+switch(type) {
+case 'crow': return new CrowChar(x, y, color, side, type);
+case 'shield': return new ShieldChar(x, y, color, side, type);
+case 'giant': return new GiantChar(x, y, color, side, type);
+case 'obstacle': return new ObstacleChar(x, y, color, side, type);
+case 'shaman': return new ShamanChar(x, y, color, side, type);
+case 'ninja': return new NinjaChar(x, y, color, side, type);
+case 'spider': return new SpiderChar(x, y, color, side, type);
+}
+}
+document.getElementById('startBtn').addEventListener('click', () => {
+const p1Type = document.getElementById('p1Select').value;
+const p2Type = document.getElementById('p2Select').value;
+// 重置環境
+projectiles = []; obstacles = []; zones = []; particles = [];
+// 生成角色
+p1 = createCharacter(p1Type, 250, 275, '#ff4757', 'p1');
+p2 = createCharacter(p2Type, 650, 275, '#1e90ff', 'p2');
+document.getElementById('status').innerText = "⚔️ 戰鬥激烈進行中...";
+gameRunning = true;
+gameLoop();
+});
+
+  
