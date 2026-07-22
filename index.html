@@ -2,44 +2,36 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>流暢優化版-物理碰撞大亂鬥</title>
+    <title>100%絕不卡死-碰撞大亂鬥</title>
     <style>
         body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: sans-serif; }
-        #control { margin-bottom: 10px; display: flex; gap: 10px; }
-        select, button { padding: 8px 16px; background: #333; color: #fff; border: 1px solid #555; cursor: pointer; border-radius: 4px; }
-        canvas { border: 4px solid #333; background: #0a0a0a; }
-        #status { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #ffeb3b; }
+        #control { margin-bottom: 10px; }
+        select, button { padding: 6px 12px; background: #333; color: #fff; border: 1px solid #555; cursor: pointer; }
+        canvas { border: 2px solid #555; background: #000; }
+        #status { font-size: 18px; margin-bottom: 10px; color: #ffeb3b; }
     </style>
 </head>
 <body>
 
-    <div id="status">選擇角色後點擊開始！</div>
+    <div id="status">選擇角色並點擊開始！</div>
     <div id="control">
-        <label>紅方: 
-            <select id="p1Select">
-                <option value="crow">烏鴉</option>
-                <option value="shield">護盾</option>
-                <option value="giant">巨大</option>
-                <option value="obstacle">障礙物</option>
-                <option value="shaman">巫女</option>
-                <option value="ninja">忍者</option>
-                <option value="spider">蜘蛛</option>
-            </select>
-        </label>
-        <label>藍方: 
-            <select id="p2Select">
-                <option value="crow">烏鴉</option>
-                <option value="shield" selected>護盾</option>
-                <option value="giant">巨大</option>
-                <option value="obstacle">障礙物</option>
-                <option value="shaman">巫女</option>
-                <option value="ninja">忍者</option>
-                <option value="spider">蜘蛛</option>
-            </select>
-        </label>
-        <button id="startBtn">開始戰鬥</button>
+        紅方: 
+        <select id="p1Select">
+            <option value="crow">烏鴉(文字詛咒)</option>
+            <option value="shield">護盾(無敵)</option>
+            <option value="giant">巨大(變大)</option>
+            <option value="shaman">巫女(回血陣)</option>
+        </select>
+        藍方: 
+        <select id="p2Select">
+            <option value="crow">烏鴉(文字詛咒)</option>
+            <option value="shield" selected>護盾(無敵)</option>
+            <option value="giant">巨大(變大)</option>
+            <option value="shaman">巫女(回血陣)</option>
+        </select>
+        <button id="startBtn">開始</button>
     </div>
-    <canvas id="gameCanvas" width="800" height="500"></canvas>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
@@ -47,319 +39,151 @@ const ctx = canvas.getContext('2d');
 
 let gameRunning = false;
 let p1 = null, p2 = null;
-let projectiles = [], obstacles = [], zones = [];
 
-const BASE_SPEED = 7; // 全體速度加快
-
-// 基礎角色類別
-class Character {
+class Ball {
     constructor(x, y, color, side, type) {
         this.x = x; this.y = y; this.color = color; this.side = side; this.type = type;
         this.baseRadius = 20; this.radius = this.baseRadius;
-        this.hp = 100; this.maxHp = 100; this.atk = 8;
+        this.hp = 100; this.maxHp = 100;
         
         let angle = Math.random() * Math.PI * 2;
-        this.vx = Math.cos(angle) * BASE_SPEED;
-        this.vy = Math.sin(angle) * BASE_SPEED;
+        this.vx = Math.cos(angle) * 5;
+        this.vy = Math.sin(angle) * 5;
 
-        this.cd = 0; // 技能冷卻計時器 (以幀為單位)
-        this.stateTimer = 0; // 狀態持續時間
+        this.timer = 0;
         this.isShielded = false;
         this.isGiant = false;
-        this.isSlowed = false;
         this.halfHpTriggered = false;
-        this.storedDamage = 0;
     }
 
     get mass() { return this.radius; }
 
-    takeDamage(amount) {
-        if (this.hp <= 0) return;
-        if (this.isShielded) {
-            if (this.halfHpTriggered) this.storedDamage += amount;
-            return;
-        }
-        this.hp = Math.max(0, this.hp - amount);
-    }
-
-    update() {
+    update(enemy) {
         if (this.hp <= 0) return;
 
-        // 半血覺醒判定
+        // 半血爆發判定
         if (this.hp <= 50 && !this.halfHpTriggered) {
             this.halfHpTriggered = true;
-            triggerAwakening(this);
+            if (this.type === 'shaman') { // 巫女半血直接扣敵方30血
+                enemy.hp = Math.max(0, enemy.hp - 30);
+            }
         }
 
-        // 計算目前速度
-        let speedMult = 1;
-        if (this.isGiant) speedMult *= (this.halfHpTriggered ? 2.0 : 1.3);
-        if (this.isSlowed) speedMult *= 0.4;
-        
-        let currentSpeed = BASE_SPEED * speedMult;
-        let d = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
-        if (d > 0) {
-            this.vx = (this.vx / d) * currentSpeed;
-            this.vy = (this.vy / d) * currentSpeed;
-        }
-
+        // 基本移動
         this.x += this.vx; this.y += this.vy;
 
-        // 牆壁碰撞
+        // 牆壁反彈
         if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; }
         if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; }
         if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; }
         if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; }
 
-        // 技能與狀態邏輯更新
-        if (this.cd > 0) this.cd--;
-        if (this.stateTimer > 0) {
-            this.stateTimer--;
-            if (this.stateTimer === 0) {
-                this.isShielded = false;
+        // 技能冷卻邏輯 (每幀計數)
+        this.timer++;
+        
+        // 1. 烏鴉：每 10 秒 (600幀) 直接讓敵方扣血
+        if (this.type === 'crow' && this.timer >= 600) {
+            this.timer = 0;
+            enemy.hp = Math.max(0, enemy.hp - (this.halfHpTriggered ? 20 : 10));
+        }
+        // 2. 護盾：每 10 秒開啟 5 秒無敵
+        else if (this.type === 'shield') {
+            let cycle = this.timer % 600;
+            this.isShielded = (cycle < 300); // 前 5 秒無敵
+        }
+        // 3. 巨大：每 10 秒變大 5 秒
+        else if (this.type === 'giant') {
+            let cycle = this.timer % 600;
+            if (cycle < 300) {
+                this.isGiant = true;
+                this.radius = this.baseRadius * (this.halfHpTriggered ? 2.0 : 1.5);
+            } else {
                 this.isGiant = false;
                 this.radius = this.baseRadius;
-                // 護盾覺醒：結束時反彈傷害
-                if (this.type === 'shield' && this.halfHpTriggered && this.storedDamage > 0) {
-                    let enemy = (this.side === 'p1') ? p2 : p1;
-                    enemy.takeDamage(this.storedDamage);
-                    this.storedDamage = 0;
-                }
             }
         }
-
-        runActiveSkill(this);
+        // 4. 巫女：每 5 秒 (300幀) 如果在畫面中心附近就回血
+        else if (this.type === 'shaman') {
+            let distToCenter = Math.hypot(this.x - 300, this.y - 200);
+            if (distToCenter < 100) {
+                this.hp = Math.min(this.maxHp, this.hp + 0.1); // 在中心點法陣內微量回血
+            }
+        }
     }
 
     draw() {
         if (this.hp <= 0) return;
+
+        // 如果是巫女，在畫面中央畫一個靜態法陣
+        if (this.type === 'shaman') {
+            ctx.beginPath(); ctx.arc(300, 200, 100, 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.stroke();
+        }
+
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = this.isShielded ? '#00e5ff' : this.color;
         ctx.fill();
-        ctx.closePath();
 
-        // 護盾特效
-        if (this.isShielded) {
-            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI*2);
-            ctx.strokeStyle = this.halfHpTriggered ? '#e040fb' : '#00e5ff';
-            ctx.lineWidth = 3; ctx.stroke();
-        }
-
-        // 血條
-        ctx.fillStyle = '#555'; ctx.fillRect(this.x - 20, this.y - this.radius - 12, 40, 5);
-        ctx.fillStyle = this.side === 'p1' ? '#ff1744' : '#2979ff';
-        ctx.fillRect(this.x - 20, this.y - this.radius - 12, 40 * (this.hp / this.maxHp), 5);
-        
-        // 文字標籤
-        ctx.fillStyle = '#fff'; ctx.font = '10px Arial'; ctx.textAlign = 'center';
-        ctx.fillText(this.type.toUpperCase() + (this.halfHpTriggered?"★":""), this.x, this.y + 4);
+        // 血條與文字
+        ctx.fillStyle = '#fff'; ctx.font = '12px Arial'; ctx.textAlign = 'center';
+        ctx.fillText(this.type.toUpperCase() + ` (${Math.floor(this.hp)})`, this.x, this.y - this.radius - 5);
     }
 }
 
-// ================= 核心技能運作系統（100%防卡死優化） =================
-function runActiveSkill(p) {
-    let enemy = (p.side === 'p1') ? p2 : p1;
-
-    // 1. 烏鴉 (每10秒 = 600幀)
-    if (p.type === 'crow' && p.cd === 0) {
-        p.cd = 600;
-        projectiles.push({ type: 'crow', x: p.x, y: p.y, target: enemy, side: p.side, speed: 5, special: false, life: 300 });
-    }
-    // 2. 護盾 (每10秒開啟5秒=300幀)
-    else if (p.type === 'shield' && p.cd === 0) {
-        p.cd = 600; p.isShielded = true; p.stateTimer = 300;
-    }
-    // 3. 巨大 (每10秒開啟5秒)
-    else if (p.type === 'giant' && p.cd === 0) {
-        p.cd = 600; p.isGiant = true; p.stateTimer = 300;
-    }
-    // 4. 障礙物 (每5秒 = 300幀)
-    else if (p.type === 'obstacle' && p.cd === 0) {
-        p.cd = 300;
-        if (obstacles.length >= 5) obstacles.shift(); // 嚴格限制上限5
-        obstacles.push({ x: p.x + (Math.random()-0.5)*30, y: p.y + (Math.random()-0.5)*30, radius: 12, side: p.side });
-    }
-    // 5. 巫女 (每5秒 = 300幀)
-    else if (p.type === 'shaman' && p.cd === 0) {
-        p.cd = 300;
-        zones.push({ x: p.x, y: p.y, radius: 85, life: 240, side: p.side }); // 範圍增加到85
-    }
-    // 6. 忍者 (每20秒 = 1200幀)
-    else if (p.type === 'ninja' && p.cd === 0) {
-        p.cd = 1200;
-        fireKunai(p);
-    }
-    // 7. 蜘蛛 (每5秒 = 300幀)
-    else if (p.type === 'spider' && p.cd === 0) {
-        p.cd = 300;
-        let tx = Math.random() < 0.5 ? 0 : canvas.width;
-        let ty = Math.random() * canvas.height;
-        projectiles.push({ type: 'silk', x: p.x, y: p.y, tx: tx, ty: ty, owner: p, life: 60, state: 'pull' });
-    }
-
-    // 巫女站在法陣內的回血加速被動
-    if (p.type === 'shaman') {
-        let inZone = zones.some(z => z.side === p.side && Math.hypot(p.x - z.x, p.y - z.y) < z.radius);
-        if (inZone) {
-            p.hp = Math.min(p.maxHp, p.hp + 0.08);
-            p.vx *= 1.03; p.vy *= 1.03;
-        }
-    }
-}
-
-// 忍者發射苦無
-function fireKunai(p) {
-    let currentKunai = projectiles.filter(pr => pr.type === 'kunai' && pr.side === p.side).length;
-    if (currentKunai < 3) { // 上限3
-        let a = Math.random() * Math.PI * 2;
-        projectiles.push({ type: 'kunai', x: p.x, y: p.y, vx: Math.cos(a)*8, vy: Math.sin(a)*8, side: p.side, life: 400 });
-    }
-}
-
-// ================= 半血自動覺醒技能 =================
-function triggerAwakening(p) {
-    let enemy = (p.side === 'p1') ? p2 : p1;
-    
-    if (p.type === 'crow') {
-        // 生成一隻可以破壞障礙物的大烏鴉
-        projectiles.push({ type: 'crow', x: p.x, y: p.y, target: enemy, side: p.side, speed: 6, special: true, life: 400 });
-    } 
-    else if (p.type === 'obstacle') {
-        // 障礙物全部爆炸
-        obstacles.forEach(obs => {
-            if (obs.side === p.side && Math.hypot(obs.x - enemy.x, obs.y - enemy.y) < enemy.radius + 60) {
-                enemy.takeDamage(18);
-            }
-        });
-        obstacles = obstacles.filter(obs => obs.side !== p.side);
-    } 
-    else if (p.type === 'shaman') {
-        // 月神降臨
-        enemy.takeDamage(35);
-        p.hp = Math.min(p.maxHp, p.hp + 15);
-    } 
-    else if (p.type === 'spider') {
-        // 全場緩速
-        enemy.isSlowed = true;
-    }
-    // 註：巨大、護盾、忍者分身的半血邏輯已直接整合進 update 迴圈內優化處理
-}
-
-// ================= 物理碰撞與實體更新 =================
-function updateGame() {
-    // 1. 兩球常規物理碰撞
+function checkCollision() {
     let dx = p2.x - p1.x, dy = p2.y - p1.y;
     let dist = Math.hypot(dx, dy);
     let minDist = p1.radius + p2.radius;
 
     if (dist < minDist && p1.hp > 0 && p2.hp > 0) {
-        p1.takeDamage(p2.atk); p2.takeDamage(p1.atk);
-        
+        // 計算傷害（如果沒開盾）
+        if (!p1.isShielded) p1.hp = Math.max(0, p1.hp - 8);
+        if (!p2.isShielded) p2.hp = Math.max(0, p2.hp - 8);
+
+        // 彈開位置修正
         let overlap = minDist - dist;
         let nx = dx / dist, ny = dy / dist;
         p1.x -= nx * overlap * 0.5; p1.y -= ny * overlap * 0.5;
         p2.x += nx * overlap * 0.5; p2.y += ny * overlap * 0.5;
 
+        // 速度反轉
         let kx = p1.vx - p2.vx, ky = p1.vy - p2.vy;
         let p = 2 * (nx * kx + ny * ky) / (p1.mass + p2.mass);
         p1.vx -= p * p2.mass * nx; p1.vy -= p * p2.mass * ny;
         p2.vx += p * p1.mass * nx; p2.vy += p * p1.mass * ny;
     }
+}
 
-    // 2. 角色與障礙物碰撞
-    [p1, p2].forEach(p => {
-        obstacles.forEach(obs => {
-            let od = Math.hypot(obs.x - p.x, obs.y - p.y);
-            if (od < p.radius + obs.radius) {
-                p.vx = -p.vx * 0.8; p.vy = -p.vy * 0.8;
-            }
-        });
-    });
-
-    // 3. 處理區域壽命
-    zones.forEach(z => z.life--);
-    zones = zones.filter(z => z.life > 0);
-// 4. 處理投射物移動與命中（嚴格限制生命週期，防止卡死）
-projectiles.forEach((pr, idx) => {
-pr.life--;
-let enemy = (pr.side === 'p1') ? p2 : p1;
-if (pr.type === 'crow') {
-let cdx = pr.target.x - pr.x, cdy = pr.target.y - pr.y;
-let cd = Math.hypot(cdx, cdy);
-if (cd > 0) {
-pr.x += (cdx / cd) * pr.speed; pr.y += (cdy / cd) * pr.speed;
-}
-if (cd < pr.target.radius + 5) {
-pr.target.takeDamage(12); pr.life = 0;
-}
-if (pr.special) { // 破壞障礙物
-obstacles = obstacles.filter(obs => Math.hypot(obs.x - pr.x, obs.y - pr.y) > obs.radius + 10);
-}
-}
-else if (pr.type === 'kunai') {
-pr.x += pr.vx; pr.y += pr.vy;
-if (pr.x < 0 || pr.x > canvas.width) pr.vx *= -1;
-if (pr.y < 0 || pr.y > canvas.height) pr.vy *= -1;
-if (Math.hypot(pr.x - enemy.x, pr.y - enemy.y) < enemy.radius + 5) {
-enemy.takeDamage(10); pr.life = 0;
-}
-}
-else if (pr.type === 'silk') {
-let tdx = pr.tx - pr.owner.x, tdy = pr.ty - pr.owner.y;
-let td = Math.hypot(tdx, tdy);
-if (td > 15) {
-pr.owner.vx = (tdx / td) * (BASE_SPEED * 2);
-pr.owner.vy = (tdy / td) * (BASE_SPEED * 2);
-} else { pr.life = 0; }
-}
-});
-projectiles = projectiles.filter(pr => pr.life > 0);
-}
-// ================= 渲染畫面 =================
-function draw() {
-ctx.clearRect(0, 0, canvas.width, canvas.height);
-zones.forEach(z => {
-ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
-ctx.fillStyle = z.side === 'p1' ? 'rgba(255,23,68,0.1)' : 'rgba(41,121,255,0.1)';
-ctx.fill();
-});
-obstacles.forEach(obs => {
-ctx.beginPath(); ctx.arc(obs.x, obs.y, obs.radius, 0, Math.PI*2);
-ctx.fillStyle = '#757575'; ctx.fill();
-});
-projectiles.forEach(pr => {
-ctx.beginPath();
-if (pr.type === 'crow') {
-ctx.arc(pr.x, pr.y, pr.special ? 9 : 5, 0, Math.PI2);
-ctx.fillStyle = pr.special ? '#ff9100' : '#fff';
-} else if (pr.type === 'kunai') {
-ctx.arc(pr.x, pr.y, 4, 0, Math.PI2);
-ctx.fillStyle = '#ffea00';
-} else if (pr.type === 'silk') {
-ctx.moveTo(pr.owner.x, pr.owner.y); ctx.lineTo(pr.tx, pr.ty);
-ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.stroke();
-return;
-}
-ctx.fill();
-});
-p1.draw(); p2.draw();
-}
-// ================= 主迴圈 =================
 function gameLoop() {
-if (!gameRunning) return;
-updateGame();
-draw();
-const statusText = document.getElementById('status');
-if (p1.hp <= 0 && p2.hp <= 0) { statusText.innerText = "💥 平手！"; gameRunning = false; }
-else if (p1.hp <= 0) { statusText.innerText = "🔵 藍方勝利！"; gameRunning = false; }
-else if (p2.hp <= 0) { statusText.innerText = "🔴 紅方勝利！"; gameRunning = false; }
-if (gameRunning) requestAnimationFrame(gameLoop);
+    if (!gameRunning) return;
+
+    p1.update(p2);
+    p2.update(p1);
+    checkCollision();
+
+    // 渲染
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    p1.draw();
+    p2.draw();
+
+    // 輸贏判定
+    const statusText = document.getElementById('status');
+    if (p1.hp <= 0 && p2.hp <= 0) { statusText.innerText = "平手！"; gameRunning = false; }
+    else if (p1.hp <= 0) { statusText.innerText = "藍方獲勝！"; gameRunning = false; }
+    else if (p2.hp <= 0) { statusText.innerText = "紅方獲勝！"; gameRunning = false; }
+
+    if (gameRunning) requestAnimationFrame(gameLoop);
 }
+
 document.getElementById('startBtn').addEventListener('click', () => {
-projectiles = []; obstacles = []; zones = [];
-p1 = new Character(200, 250, '#ff1744', 'p1', document.getElementById('p1Select').value);
-p2 = new Character(600, 250, '#2979ff', 'p2', document.getElementById('p2Select').value);
-document.getElementById('status').innerText = "⚔️ 戰鬥中...";
-gameRunning = true; gameLoop();
+    p1 = new Ball(150, 200, '#ff1744', 'p1', document.getElementById('p1Select').value);
+    p2 = new Ball(450, 200, '#2979ff', 'p2', document.getElementById('p2Select').value);
+    document.getElementById('status').innerText = "戰鬥中...";
+    gameRunning = true;
+    gameLoop();
 });
+</script>
+</body>
+</html>
+
