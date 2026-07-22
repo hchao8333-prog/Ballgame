@@ -1,115 +1,161 @@
+
+
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>粉紅法陣優化版-物理碰撞大亂鬥</title>
+    <title>物理碰撞大亂鬥-UI升級版</title>
     <style>
         body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #fff; font-family: sans-serif; }
-        #control { margin-bottom: 10px; }
-        select, button { padding: 6px 12px; background: #333; color: #fff; border: 1px solid #555; cursor: pointer; }
-        canvas { border: 2px solid #555; background: #050505; }
-        #status { font-size: 18px; margin-bottom: 10px; color: #ffeb3b; font-weight: bold; }
+        
+        /* 頂部大型獨立血條樣式 */
+        #hpContainer { display: flex; width: 750px; justify-content: space-between; margin-bottom: 10px; font-weight: bold; font-size: 18px; }
+        .hp-bar-wrapper { width: 45%; background: #333; border: 2px solid #555; height: 25px; border-radius: 5px; position: relative; overflow: hidden; }
+        .hp-fill { height: 100%; width: 100%; transition: width 0.1s ease; }
+        #p1HpFill { background: #ff1744; }
+        #p2HpFill { background: #2979ff; }
+        .hp-text { position: absolute; width: 100%; text-align: center; line-height: 25px; color: #fff; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px #000; }
+
+        #control { margin-bottom: 15px; background: #222; padding: 10px; border-radius: 8px; }
+        select, button { padding: 6px 12px; background: #444; color: #fff; border: 1px solid #666; cursor: pointer; font-size: 14px; }
+        canvas { border: 3px solid #666; background: #000; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        #status { font-size: 20px; margin-bottom: 10px; color: #ffeb3b; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="status">選擇角色並點擊開始！</div>
+    <div id="status">請選擇角色並點擊開始戰鬥！</div>
+
+    <!-- 頂部獨立顯示的血條區域 -->
+    <div id="hpContainer">
+        <div class="hp-bar-wrapper">
+            <div id="p1HpFill" class="hp-fill"></div>
+            <div id="p1HpText" class="hp-text">紅方 HP: 100 / 100</div>
+        </div>
+        <div class="hp-bar-wrapper">
+            <div id="p2HpFill" class="hp-fill"></div>
+            <div id="p2HpText" class="hp-text">藍方 HP: 100 / 100</div>
+        </div>
+    </div>
+
     <div id="control">
-        紅方: 
+        紅方角色: 
         <select id="p1Select">
-            <option value="crow">烏鴉</option>
-            <option value="shield">護盾</option>
-            <option value="giant">巨大</option>
-            <option value="shaman">巫女</option>
+            <option value="crow">🦅 烏鴉 (發射追蹤紫球)</option>
+            <option value="shaman">🌸 巫女 (粉紅回血陣)</option>
+            <option value="shield">🛡️ 護盾 (無敵藍圈)</option>
+            <option value="giant">🟡 巨大 (變大體型)</option>
         </select>
-        藍方: 
+        &nbsp;&nbsp;&nbsp;&nbsp;
+        藍方角色: 
         <select id="p2Select">
-            <option value="crow">烏鴉</option>
-            <option value="shield" selected>護盾</option>
-            <option value="giant">巨大</option>
-            <option value="shaman">巫女</option>
+            <option value="crow">🦅 烏鴉 (發射追蹤紫球)</option>
+            <option value="shaman" selected>🌸 巫女 (粉紅回血陣)</option>
+            <option value="shield">🛡️ 護盾 (無敵藍圈)</option>
+            <option value="giant">🟡 巨大 (變大體型)</option>
         </select>
+        &nbsp;&nbsp;
         <button id="startBtn">開始戰鬥</button>
     </div>
-    <canvas id="gameCanvas" width="700" height="450"></canvas>
+    <canvas id="gameCanvas" width="750" height="450"></canvas>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 let gameRunning = false;
-let p1 = null, p2 = null;
-let projectiles = []; 
-let zones = [];       
+let p1 = null;
+let p2 = null;
+
+let activeCrows = [];
+let activePinkZones = [];
 
 const BASE_SPEED = 6;
 
-class Ball {
+// 根據角色類型和狀態返回對應的表情符號 (Emoji)
+function getEmoji(type, isAwakened) {
+    if (type === 'crow') return isAwakened ? '👑' : '🦅';
+    if (type === 'shaman') return isAwakened ? '🌙' : '🌸';
+    if (type === 'shield') return '🛡️';
+    if (type === 'giant') return '🟡';
+    return '⚽';
+}
+
+class Player {
     constructor(x, y, color, side, type) {
-        this.x = x; this.y = y; this.color = color; this.side = side; this.type = type;
-        this.baseRadius = 20; this.radius = this.baseRadius;
-        this.hp = 100; this.maxHp = 100;
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.side = side; 
+        this.type = type;
+        
+        this.baseRadius = 24; // 稍微放大半徑，方便容納表情符號
+        this.radius = this.baseRadius;
+        this.hp = 100;
+        this.maxHp = 100;
         
         let angle = Math.random() * Math.PI * 2;
-        this.vx = Math.cos(angle) * BASE_SPEED;
-        this.vy = Math.sin(angle) * BASE_SPEED;
+        this.vx = Math.cos(angle) * 6;
+        this.vy = Math.sin(angle) * 6;
 
-        this.timer = 0;
+        this.skillTimer = 0;
         this.isShielded = false;
         this.isGiant = false;
         this.halfHpTriggered = false;
-        this.isInZone = false; 
+        this.isInZone = false;
     }
 
-    get mass() { return this.radius; }
-
-    update(enemy) {
+    update() {
         if (this.hp <= 0) return;
 
+        let enemy = (this.side === 'p1') ? p2 : p1;
+
+        // 半血爆發判定
         if (this.hp <= 50 && !this.halfHpTriggered) {
             this.halfHpTriggered = true;
-            if (this.type === 'shaman') { 
+            if (this.type === 'shaman') {
                 enemy.hp = Math.max(0, enemy.hp - 35);
                 this.hp = Math.min(this.maxHp, this.hp + 15);
             }
         }
 
-        let currentSpeed = BASE_SPEED;
-        if (this.isGiant) currentSpeed *= (this.halfHpTriggered ? 2.0 : 1.3);
-        if (this.type === 'shaman' && this.isInZone) currentSpeed *= 1.5;
+        let speedMult = 1;
+        if (this.isGiant) speedMult *= (this.halfHpTriggered ? 2.0 : 1.3);
+        if (this.type === 'shaman' && this.isInZone) speedMult *= 1.5;
 
         let d = Math.hypot(this.vx, this.vy);
         if (d > 0) {
-            this.vx = (this.vx / d) * currentSpeed;
-            this.vy = (this.vy / d) * currentSpeed;
+            this.vx = (this.vx / d) * 6 * speedMult;
+            this.vy = (this.vy / d) * 6 * speedMult;
         }
 
-        this.x += this.vx; this.y += this.vy;
+        this.x += this.vx;
+        this.y += this.vy;
 
         if (this.x - this.radius < 0) { this.x = this.radius; this.vx = -this.vx; }
         if (this.x + this.radius > canvas.width) { this.x = canvas.width - this.radius; this.vx = -this.vx; }
         if (this.y - this.radius < 0) { this.y = this.radius; this.vy = -this.vy; }
         if (this.y + this.radius > canvas.height) { this.y = canvas.height - this.radius; this.vy = -this.vy; }
 
-        this.timer++;
-        
-        if (this.type === 'crow' && this.timer >= 600) {
-            this.timer = 0;
-            projectiles.push({
-                x: this.x, y: this.y,
-                target: enemy,
-                side: this.side,
-                radius: this.halfHpTriggered ? 12 : 7, 
-                speed: this.halfHpTriggered ? 5.5 : 4,
+        this.skillTimer++;
+
+        if (this.type === 'crow' && this.skillTimer >= 600) {
+            this.skillTimer = 0;
+            activeCrows.push({
+                x: this.x,
+                y: this.y,
+                targetSide: (this.side === 'p1') ? 'p2' : 'p1', 
+                radius: this.halfHpTriggered ? 14 : 8, 
+                speed: this.halfHpTriggered ? 6 : 4,
                 isSpecial: this.halfHpTriggered
             });
         }
         else if (this.type === 'shield') {
-            let cycle = this.timer % 600;
-            this.isShielded = (cycle < 300); 
+            let cycle = this.skillTimer % 600;
+            this.isShielded = (cycle < 300);
         }
         else if (this.type === 'giant') {
-            let cycle = this.timer % 600;
+            let cycle = this.skillTimer % 600;
             if (cycle < 300) {
                 this.isGiant = true;
                 this.radius = this.baseRadius * (this.halfHpTriggered ? 2.0 : 1.5);
@@ -118,20 +164,21 @@ class Ball {
                 this.radius = this.baseRadius;
             }
         }
-        else if (this.type === 'shaman' && this.timer >= 300) {
-            this.timer = 0;
-            zones.push({
-                x: this.x, y: this.y,
-                radius: 85, 
-                life: 240,  
+        else if (this.type === 'shaman' && this.skillTimer >= 300) {
+            this.skillTimer = 0;
+            activePinkZones.push({
+                x: this.x,
+                y: this.y,
+                radius: 85,
+                life: 240, 
                 side: this.side
             });
         }
 
         if (this.type === 'shaman') {
-            this.isInZone = zones.some(z => z.side === this.side && Math.hypot(this.x - z.x, this.y - z.y) < z.radius);
+            this.isInZone = activePinkZones.some(z => z.side === this.side && Math.hypot(this.x - z.x, this.y - z.y) < z.radius);
             if (this.isInZone) {
-                this.hp = Math.min(this.maxHp, this.hp + 0.1); 
+                this.hp = Math.min(this.maxHp, this.hp + 0.12); 
             }
         }
     }
@@ -139,57 +186,101 @@ class Ball {
     draw() {
         if (this.hp <= 0) return;
 
+        // 1. 繪製球體本體
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-        // 站在法陣內時，球體會發出粉紅光芒 (#ff69b4)
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fillStyle = this.isInZone ? '#ff69b4' : this.color;
         ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
+        // 2. 在球體正中央標示表情符號 (Emoji)
+        ctx.fillStyle = '#fff';
+        // 根據球體大小動態調整 Emoji 的字型大小
+        ctx.font = `${this.radius * 1.1}px Arial`; 
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        let emoji = getEmoji(this.type, this.halfHpTriggered);
+        ctx.fillText(emoji, this.x, this.y);
+
+        // 3. 繪製護盾無敵藍圈
         if (this.isShielded) {
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI*2);
+            ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
             ctx.strokeStyle = '#00e5ff';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 4;
             ctx.stroke();
         }
-
-        ctx.fillStyle = '#fff'; ctx.font = '12px Arial'; ctx.textAlign = 'center';
-        ctx.fillText(this.type.toUpperCase() + (this.halfHpTriggered?"★":"") + ` (${Math.floor(this.hp)})`, this.x, this.y - this.radius - 5);
     }
 }
 
-function checkCollision() {
-    let dx = p2.x - p1.x, dy = p2.y - p1.y;
+function checkBallCollision() {
+    if (p1.hp <= 0 || p2.hp <= 0) return;
+
+    let dx = p2.x - p1.x;
+    let dy = p2.y - p1.y;
     let dist = Math.hypot(dx, dy);
     let minDist = p1.radius + p2.radius;
 
-    if (dist < minDist && p1.hp > 0 && p2.hp > 0) {
+    if (dist < minDist) {
         if (!p1.isShielded) p1.hp = Math.max(0, p1.hp - 8);
         if (!p2.isShielded) p2.hp = Math.max(0, p2.hp - 8);
 
         let overlap = minDist - dist;
-        let nx = dx / dist, ny = dy / dist;
-        p1.x -= nx * overlap * 0.5; p1.y -= ny * overlap * 0.5;
-        p2.x += nx * overlap * 0.5; p2.y += ny * overlap * 0.5;
+        let nx = dx / dist;
+        let ny = dy / dist;
+        p1.x -= nx * overlap * 0.5;
+        p1.y -= ny * overlap * 0.5;
+        p2.x += nx * overlap * 0.5;
+        p2.y += ny * overlap * 0.5;
 
-        let kx = p1.vx - p2.vx, ky = p1.vy - p2.vy;
-        let p = 2 * (nx * kx + ny * ky) / (p1.mass + p2.mass);
-        p1.vx -= p * p2.mass * nx; p1.vy -= p * p2.mass * ny;
-        p2.vx += p * p1.mass * nx; p2.vy += p * p1.mass * ny;
+        // 碰撞後動量交換（物理反彈）
+        let mass1 = p1.radius;
+        let mass2 = p2.radius;
+        let kx = p1.vx - p2.vx;
+        let ky = p1.vy - p2.vy;
+        let p = 2 * (nx * kx + ny * ky) / (mass1 + mass2);
+        p1.vx -= p * mass2 * nx;
+        p1.vy -= p * mass2 * ny;
+        p2.vx += p * mass1 * nx;
+        p2.vy += p * mass1 * ny;
+    }
+}
+
+// 更新頂部的大型獨立血條介面
+function updateHpUI() {
+    const p1Fill = document.getElementById('p1HpFill');
+    const p1Text = document.getElementById('p1HpText');
+    const p2Fill = document.getElementById('p2HpFill');
+    const p2Text = document.getElementById('p2HpText');
+
+    if (p1 && p2) {
+        let p1Pct = (p1.hp / p1.maxHp) * 100;
+        let p2Pct = (p2.hp / p2.maxHp) * 100;
+
+        p1Fill.style.width = p1Pct + '%';
+        p1Text.innerText = `紅方 (${p1.type.toUpperCase()}): ${Math.floor(p1.hp)} / 100`;
+
+        p2Fill.style.width = p2Pct + '%';
+        p2Text.innerText = `藍方 (${p2.type.toUpperCase()}): ${Math.floor(p2.hp)} / 100`;
     }
 }
 
 function updateGame() {
-    p1.update(p2);
-    p2.update(p1);
-    checkCollision();
+    p1.update();
+    p2.update();
+    checkBallCollision();
 
-    zones.forEach(z => z.life--);
-    zones = zones.filter(z => z.life > 0);
+    activePinkZones.forEach(z => z.life--);
+    activePinkZones = activePinkZones.filter(z => z.life > 0);
 
-    projectiles.forEach((crow, idx) => {
-        let tdx = crow.target.x - crow.x;
-        let tdy = crow.target.y - crow.y;
+    for (let i = activeCrows.length - 1; i >= 0; i--) {
+        let crow = activeCrows[i];
+        let enemy = (crow.targetSide === 'p1') ? p1 : p2;
+
+        let tdx = enemy.x - crow.x;
+        let tdy = enemy.y - crow.y;
         let tdist = Math.hypot(tdx, tdy);
 
         if (tdist > 0) {
@@ -197,66 +288,69 @@ function updateGame() {
             crow.y += (tdy / tdist) * crow.speed;
         }
 
-        if (tdist < crow.target.radius + crow.radius) {
-            crow.target.takeDamage(12);
-            projectiles.splice(idx, 1); 
+        if (tdist < enemy.radius + crow.radius) {
+            enemy.hp = Math.max(0, enemy.hp - 12); 
+            activeCrows.splice(i, 1); 
         }
-    });
+    }
+
+    // 隨時刷新頂部大血條
+    updateHpUI();
 }
 
-function drawEverything() {
+function drawGame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 1. 繪製明顯的粉紅色巫女回血陣
-    zones.forEach(z => {
-        ctx.beginPath();
-        ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
-        // 設定粉紅色的邊框與半透明內圈
-        ctx.strokeStyle = 'rgba(255, 105, 180, 0.7)'; 
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255, 105, 180, 0.15)'; 
-        ctx.fill();
-    });
-
-    // 2. 繪製追蹤烏鴉
-    projectiles.forEach(crow => {
-        ctx.beginPath();
-        ctx.arc(crow.x, crow.y, crow.radius, 0, Math.PI*2);
-        ctx.fillStyle = crow.isSpecial ? '#e67e22' : '#9b59b6'; 
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-    });
-
-    p1.draw();
-    p2.draw();
-}
-
-function gameLoop() {
-    if (!gameRunning) return;
-
-    updateGame();
-    drawEverything();
-
-    const statusText = document.getElementById('status');
-    if (p1.hp <= 0 && p2.hp <= 0) { statusText.innerText = "💥 平手！"; gameRunning = false; }
-    else if (p1.hp <= 0) { statusText.innerText = "🔵 藍方獲勝！"; gameRunning = false; }
-    else if (p2.hp <= 0) { statusText.innerText = "🔴 紅方獲勝！"; gameRunning = false; }
-
-    if (gameRunning) requestAnimationFrame(gameLoop);
-}
-
-document.getElementById('startBtn').addEventListener('click', () => {
-    projectiles = [];
-    zones = [];
-    p1 = new Ball(150, 225, '#ff1744', 'p1', document.getElementById('p1Select').value);
-    p2 = new Ball(550, 225, '#2979ff', 'p2', document.getElementById('p2Select').value);
-    document.getElementById('status').innerText = "⚔️ 戰鬥中...";
-    gameRunning = true;
-    gameLoop();
+// 1. 繪製巫女粉紅色回血法陣
+activePinkZones.forEach(z => {
+ctx.beginPath();
+ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
+ctx.strokeStyle = 'rgba(255, 20, 147, 1)';
+ctx.lineWidth = 4;
+ctx.stroke();
+ctx.fillStyle = 'rgba(255, 105, 180, 0.25)';
+ctx.fill();
+ctx.closePath();
 });
-</script>
-</body>
-</html>
+// 2. 繪製追蹤烏鴉
+activeCrows.forEach(crow => {
+let enemy = (crow.targetSide === 'p1') ? p1 : p2;
+ctx.beginPath();
+ctx.moveTo(crow.x, crow.y);
+ctx.lineTo(enemy.x, enemy.y);
+ctx.strokeStyle = 'rgba(255, 235, 59, 0.3)';
+ctx.lineWidth = 1;
+ctx.stroke();
+ctx.beginPath();
+ctx.arc(crow.x, crow.y, crow.radius, 0, Math.PI * 2);
+ctx.fillStyle = crow.isSpecial ? '#e67e22' : '#8e44ad';
+ctx.fill();
+ctx.strokeStyle = '#fff';
+ctx.lineWidth = 2;
+ctx.stroke();
+ctx.closePath();
+});
+// 3. 繪製角色球體 (內含 Emoji)
+p1.draw();
+p2.draw();
+}
+function gameLoop() {
+if (!gameRunning) return;
+updateGame();
+drawGame();
+const statusText = document.getElementById('status');
+if (p1.hp <= 0 && p2.hp <= 0) { statusText.innerText = "💥 兩敗俱傷！平手！"; gameRunning = false; }
+else if (p1.hp <= 0) { statusText.innerText = "🔵 藍方 獲勝！"; gameRunning = false; }
+else if (p2.hp <= 0) { statusText.innerText = "🔴 紅方 獲勝！"; gameRunning = false; }
+if (gameRunning) requestAnimationFrame(gameLoop);
+}
+document.getElementById('startBtn').addEventListener('click', () => {
+activeCrows = [];
+activePinkZones = [];
+let p1Type = document.getElementById('p1Select').value;
+let p2Type = document.getElementById('p2Select').value;
+p1 = new Player(150, 225, '#ff1744', 'p1', p1Type);
+p2 = new Player(600, 225, '#2979ff', 'p2', p2Type);
+document.getElementById('status').innerText = "⚔️ 碰撞激戰中...";
+gameRunning = true;
+gameLoop();
+});
