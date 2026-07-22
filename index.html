@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8"><title>極簡順暢碰撞戰鬥</title>
+    <meta charset="UTF-8"><title>絕對流暢不卡死戰鬥</title>
     <style>body{margin:0;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:#fff;font-family:sans-serif;}select,button{padding:6px;background:#333;color:#fff;border:1px solid #666;cursor:pointer;}canvas{border:2px solid #555;background:#000;margin-top:10px;}</style>
 </head>
 <body>
     <div id="status" style="font-size:20px;font-weight:bold;color:#ffeb3b">點擊開始！</div>
-    <div style="margin-top:5px;">
+    <div id="ui" style="margin-top:5px;">
         紅: <select id="p1S"><option value="crow">🦅烏鴉</option><option value="shaman">🌸巫女</option><option value="shield">🛡️護盾</option><option value="giant">🟡巨大</option></select>
         藍: <select id="p2S"><option value="crow">🦅烏鴉</option><option value="shaman" selected>🌸巫女</option><option value="shield">🛡️護盾</option><option value="giant">🟡巨大</option></select>
         <button id="start">開始戰鬥</button>
@@ -14,68 +14,105 @@
     <canvas id="c" width="700" height="480"></canvas>
 <script>
 const c=document.getElementById('c'), ctx=c.getContext('2d');
-let run=false, p1, p2, crows=[], zones=[];
+let run=false, p1, p2, crows=[], zones=[], animId=null;
 
 class Ball {
     constructor(x,y,color,side,type) {
         this.x=x; this.y=y; this.color=color; this.side=side; this.type=type;
         this.hp=100; this.timer=0; this.shield=false; this.giant=false; this.ak=false; this.inZ=false;
-        let a=Math.random()*Math.PI*2; this.vx=Math.cos(a)*6; this.vy=Math.sin(a)*6;
+        let a=Math.random()*Math.PI*2; this.vx=Math.cos(a)*5; this.vy=Math.sin(a)*5;
     }
     update(e) {
         if(this.hp<=0) return;
-        if(this.hp<=50 && !this.ak) { this.ak=true; if(this.type==='shaman'){ e.hp=Math.max(0,e.hp-35); this.hp=Math.min(100,this.hp+15); } }
-        let spd=6 * (this.giant?(this.ak?2:1.3):1) * (this.type==='shaman'&&this.inZ?1.5:1);
-        let d=Math.hypot(this.vx,this.vy); if(d>0){ this.vx=(this.vx/d)*spd; this.vy=(this.vy/d)*spd; }
+        if(this.hp<=50 && !this.ak) { 
+            this.ak=true; 
+            if(this.type==='shaman'){ e.hp=Math.max(0,e.hp-35); this.hp=Math.min(100,this.hp+15); } 
+        }
+        let spd=5 * (this.giant?(this.ak?1.8:1.3):1) * (this.type==='shaman'&&this.inZ?1.4:1);
+        let d=Math.sqrt(this.vx*this.vx+this.vy*this.vy); 
+        if(d>0){ this.vx=(this.vx/d)*spd; this.vy=(this.vy/d)*spd; }
+        
         this.x+=this.vx; this.y+=this.vy;
-        let r=(this.giant?(this.ak?48:36):24);
-        if(this.x-r<0){ this.x=r; this.vx*=-1; } if(this.x+r>700){ this.x=700-r; this.vx*=-1; }
-        if(this.y-r<50){ this.y=50+r; this.vy*=-1; } if(this.y+r>480){ this.y=480-r; this.vy*=-1; }
+        let r=(this.giant?(this.ak?45:34):22);
+        
+        if(this.x-r<0){ this.x=r; this.vx=Math.abs(this.vx); } 
+        if(this.x+r>700){ this.x=700-r; this.vx=-Math.abs(this.vx); }
+        if(this.y-r<50){ this.y=50+r; this.vy=Math.abs(this.vy); } 
+        if(this.y+r>480){ this.y=480-r; this.vy=-Math.abs(this.vy); }
+        
         this.timer++;
-        if(this.type==='crow'&&this.timer>=600){ this.timer=0; crows.push({x:this.x,y:this.y,ts:this.side==='p1'?'p2':'p1',r:this.ak?14:8,s:this.ak?6:4,ak:this.ak}); }
+        if(this.type==='crow'&&this.timer>=600){ 
+            this.timer=0; 
+            crows.push({x:this.x,y:this.y,ts:this.side==='p1'?'p2':'p1',r:this.ak?12:7,s:this.ak?5:3.5,ak:this.ak}); 
+        }
         else if(this.type==='shield') this.shield=(this.timer%600<300);
         else if(this.type==='giant') this.giant=(this.timer%600<300);
-        else if(this.type==='shaman'&&this.timer>=300){ this.timer=0; zones.push({x:this.x,y:this.y,r:85,l:240,side:this.side}); }
-        if(this.type==='shaman') { this.inZ=zones.some(z=>z.side===this.side&&Math.hypot(this.x-z.x,this.y-z.y)<z.r); if(this.inZ) this.hp=Math.min(100,this.hp+0.12); }
+        else if(this.type==='shaman'&&this.timer>=300){ 
+            this.timer=0; zones.push({x:this.x,y:this.y,r:80,l:240,side:this.side}); 
+        }
+        if(this.type==='shaman') { 
+            this.inZ=zones.some(z=>z.side===this.side&&Math.sqrt((this.x-z.x)**2+(this.y-z.y)**2)<z.r); 
+            if(this.inZ) this.hp=Math.min(100,this.hp+0.1); 
+        }
     }
     draw() {
         if(this.hp<=0) return;
-        let r=(this.giant?(this.ak?48:36):24);
+        let r=(this.giant?(this.ak?45:34):22);
         ctx.beginPath(); ctx.arc(this.x,this.y,r,0,Math.PI*2); ctx.fillStyle=this.inZ?'#ff69b4':this.color; ctx.fill(); ctx.stroke();
         ctx.fillStyle='#fff'; ctx.font=`${r*1.1}px Arial`; ctx.textAlign='center'; ctx.textBaseline='middle';
         let emo = this.type==='crow'?(this.ak?'👑':'🦅'):this.type==='shaman'?(this.ak?'🌙':'🌸'):this.type==='shield'?'🛡️':'🟡';
         ctx.fillText(emo,this.x,this.y);
-        if(this.shield){ ctx.beginPath(); ctx.arc(this.x,this.y,r+8,0,Math.PI*2); ctx.strokeStyle='#00e5ff'; ctx.lineWidth=3; ctx.stroke(); }
+        if(this.shield){ ctx.beginPath(); ctx.arc(this.x,this.y,r+7,0,Math.PI*2); ctx.strokeStyle='#00e5ff'; ctx.lineWidth=3; ctx.stroke(); }
     }
 }
 function loop() {
-    if(!run) return; p1.update(p2); p2.update(p1);
-    let dx=p2.x-p1.x, dy=p2.y-p1.y, dist=Math.hypot(dx,dy), r1=(p1.giant?(p1.ak?48:36):24), r2=(p2.giant?(p2.ak?48:36):24);
-    if(dist<r1+r2 && p1.hp>0 && p2.hp>0){
-        if(!p1.shield) p1.hp=Math.max(0,p1.hp-8); if(!p2.shield) p2.hp=Math.max(0,p2.hp-8);
-        let ol=r1+r2-dist, nx=dx/dist, ny=dy/dist; p1.x-=nx*ol*0.5; p1.y-=ny*ol*0.5; p2.x+=nx*ol*0.5; p2.y+=ny*ol*0.5;
-        let kx=p1.vx-p2.vx, ky=p1.vy-p2.vy, p=2*(nx*kx+ny*ky)/(r1+r2); p1.vx-=p*r2*nx; p1.vy-=p*r2*ny; p2.vx+=p*r1*nx; p2.vy+=p*r1*ny;
+    if(!run) return; 
+    p1.update(p2); p2.update(p1);
+    
+    let dx=p2.x-p1.x, dy=p2.y-p1.y, dist=Math.sqrt(dx*dx+dy*dy);
+    let r1=(p1.giant?(p1.ak?45:34):22), r2=(p2.giant?(p2.ak?45:34):22);
+    
+    if(dist<r1+r2 && p1.hp > 0 && p2.hp > 0){
+        if(!p1.shield) p1.hp=Math.max(0,p1.hp-8); 
+        if(!p2.shield) p2.hp=Math.max(0,p2.hp-8);
+        
+        let ol=r1+r2-dist, nx=dx/(dist||1), ny=dy/(dist||1); 
+        p1.x-=nx*(ol*0.5+1); p1.y-=ny*(ol*0.5+1); p2.x+=nx*(ol*0.5+1); p2.y+=ny*(ol*0.5+1);
+        let kx=p1.vx-p2.vx, ky=p1.vy-p2.vy, p=2*(nx*kx+ny*ky)/(r1+r2); 
+        p1.vx-=p*r2*nx; p1.vy-=p*r2*ny; p2.vx+=p*r1*nx; p2.vy+=p*r1*ny;
     }
+    
     zones.forEach(z=>z.l--); zones=zones.filter(z=>z.l>0);
     for(let i=crows.length-1;i>=0;i--){
-        let cr=crows[i], target=cr.ts==='p1'?p1:p2, tdx=target.x-cr.x, tdy=target.y-cr.y, td=Math.hypot(tdx,tdy), tr=(target.giant?(target.ak?48:36):24);
+        let cr=crows[i], target=cr.ts==='p1'?p1:p2, tdx=target.x-cr.x, tdy=target.y-cr.y, td=Math.sqrt(tdx*tdx+tdy*tdy), tr=(target.giant?(target.ak?45:34):22);
         if(td>0){ cr.x+=(tdx/td)*cr.s; cr.y+=(tdy/td)*cr.s; }
-        if(td<tr+cr.r){ target.hp=Math.max(0,target.hp-12); crows.splice(i,1); }
+        if(td<tr+cr.r){ target.takeDamage ? target.takeDamage(12) : target.hp=Math.max(0,target.hp-12); crows.splice(i,1); }
     }
+    
     ctx.clearRect(0,0,700,480);
     ctx.fillStyle='#333'; ctx.fillRect(20,15,250,20); ctx.fillRect(430,15,250,20);
-    ctx.fillStyle='#ff1744'; ctx.fillRect(20,15,p1.hp*2.5,20); ctx.fillStyle='#2979ff'; ctx.fillRect(430,15,p2.hp*2.5,20);
+    ctx.fillStyle='#ff1744'; ctx.fillRect(20,15,Math.max(0,p1.hp)*2.5,20); 
+    ctx.fillStyle='#2979ff'; ctx.fillRect(430,15,Math.max(0,p2.hp)*2.5,20);
     ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.fillText(`紅 (${p1.type}) HP:${Math.floor(p1.hp)}`,30,25);
     ctx.textAlign='right'; ctx.fillText(`藍 (${p2.type}) HP:${Math.floor(p2.hp)}`,670,25);
+    
     zones.forEach(z=>{ ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,Math.PI*2); ctx.strokeStyle='rgba(255,20,147,0.8)'; ctx.lineWidth=3; ctx.stroke(); ctx.fillStyle='rgba(255,105,180,0.15)'; ctx.fill(); });
     crows.forEach(cr=>{ ctx.beginPath(); ctx.arc(cr.x,cr.y,cr.r,0,Math.PI*2); ctx.fillStyle=cr.ak?'#e67e22':'#8e44ad'; ctx.fill(); ctx.stroke(); });
     p1.draw(); p2.draw();
+    
     let txt=document.getElementById('status');
-    if(p1.hp<=0&&p2.hp<=0){txt.innerText="💥 平手！";run=false;} else if(p1.hp<=0){txt.innerText="🔵 藍方獲勝！";run=false;} else if(p2.hp<=0){txt.innerText="🔴 紅方獲勝！";run=false;}
-    if(run) requestAnimationFrame(loop);
+    if(p1.hp<=0&&p2.hp<=0){txt.innerText="💥 平手！";run=false;document.getElementById('ui').style.display='block';} 
+    else if(p1.hp<=0){txt.innerText="🔵 藍方獲勝！";run=false;document.getElementById('ui').style.display='block';} 
+    else if(p2.hp<=0){txt.innerText="🔴 紅方獲勝！";run=false;document.getElementById('ui').style.display='block';}
+    
+    if(run) animId = requestAnimationFrame(loop);
 }
 document.getElementById('start').addEventListener('click',()=>{
-    crows=[]; zones=[]; p1=new Ball(150,250,'#ff1744','p1',document.getElementById('p1S').value); p2=new Ball(550,250,'#2979ff','p2',document.getElementById('p2S').value);
+    if(animId) cancelAnimationFrame(animId);
+    crows=[]; zones=[]; 
+    p1=new Ball(150,250,'#ff1744','p1',document.getElementById('p1S').value); 
+    p2=new Ball(550,250,'#2979ff','p2',document.getElementById('p2S').value);
+    document.getElementById('ui').style.display='none'; // 隱藏選單，100%防止點擊死當
     document.getElementById('status').innerText="⚔️ 激戰中..."; run=true; loop();
 });
 </script>
